@@ -845,11 +845,11 @@ Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""proj1"",
 EndProject";
         }
 
-        public static void VerifyResultSuccess(CommandRunnerResult result, string expectedOutputMessage = null)
+        public static void VerifyResultSuccess(CommandRunnerResult result, string expectedOutputMessage = null, string message = null)
         {
             Assert.True(
                 result.Item1 == 0,
-                "nuget.exe DID NOT SUCCEED: Ouput is " + result.Item2 + ". Error is " + result.Item3);
+                $"nuget.exe DID NOT SUCCEED: Ouput is {result.Item2}. Error is {result.Item3}{(message != null ? Environment.NewLine : string.Empty)}{message}");
 
             if (!string.IsNullOrEmpty(expectedOutputMessage))
             {

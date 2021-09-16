@@ -3,6 +3,8 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 
 namespace NuGet.Test.Utility
 {
@@ -72,6 +74,18 @@ namespace NuGet.Test.Utility
             }
 
             return testDirectory;
+        }
+
+        public override string ToString()
+        {
+            var stringBuilder = new StringBuilder();
+
+            foreach (var item in Files.Keys.Concat(new[] { NuspecFile }).OrderBy(i => i))
+            {
+                stringBuilder.AppendLine(item);
+            }
+
+            return stringBuilder.ToString();
         }
 
         private void CreateFiles()

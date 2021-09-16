@@ -6574,8 +6574,8 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
         /// </remarks>
         /// <param name="testDirBuilder">A TestDirectory builder with the info for creating the package</param>
         /// <param name="readmeEntry">Normalized Zip entry to validate</param>
-        /// <param name="message">If not null, check that the message is in the command output</param>
-        private void TestPackReadmeSuccess(TestDirectoryBuilder testDirBuilder, string readmeEntry = "readme.md", string message = null)
+        /// <param name="expectedMessage">If not null, check that the message is in the command output</param>
+        private void TestPackReadmeSuccess(TestDirectoryBuilder testDirBuilder, string readmeEntry = "readme.md", string expectedMessage = null)
         {
             using (testDirBuilder.Build())
             {
@@ -6589,7 +6589,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     waitForExit: true);
 
                 // Assert
-                Util.VerifyResultSuccess(r, message);
+                Util.VerifyResultSuccess(r, expectedMessage, message: $"Nuspec contents: {File.ReadAllText(testDirBuilder.NuspecPath)}{Environment.NewLine}Files:{Environment.NewLine}{testDirBuilder}");
                 Assert.True(File.Exists(nupkgPath));
 
                 using (var nupkgReader = new PackageArchiveReader(nupkgPath))
