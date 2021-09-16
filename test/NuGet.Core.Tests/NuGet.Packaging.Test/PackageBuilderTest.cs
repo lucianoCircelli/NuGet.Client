@@ -376,7 +376,7 @@ namespace NuGet.Packaging.Test
 
         [Theory]
         [InlineData(@"dir1\dir2\**", true, "Content")]
-        [InlineData("dir1/dir2**", false, "Content")]
+        [InlineData("dir1/dir2/**", false, "Content")]
         public void PackageBuilder_AddFiles_HasDifferentBehaviorDependingOnSlash(string source, bool expectFlattened, string destination)
         {
             using (var directory = new TestSourcesDirectory())
