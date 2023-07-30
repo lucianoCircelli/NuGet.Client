@@ -244,7 +244,7 @@ namespace NuGet.Commands
             var manifest = new Manifest(new ManifestMetadata(builder), files: null);
             string tempOutputPath = Path.Combine(
                 NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp),
-                Path.GetFileName(resolvedNuSpecOutputPath));
+                Path.GetRandomFileName());
 
             using (var stream = new FileStream(tempOutputPath, FileMode.Create))
             {
@@ -270,7 +270,7 @@ namespace NuGet.Commands
             // to the package directory with a guid would break some build tools caching
             string tempOutputPath = Path.Combine(
                 NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp),
-                Path.GetFileName(sha512OutputPath));
+                Path.GetRandomFileName());
 
             _packArgs.Logger.Log(
                 PackagingLogMessage.CreateMessage(
@@ -711,7 +711,8 @@ namespace NuGet.Commands
                 _packArgs.WarningProperties = WarningProperties.GetWarningProperties(
                 treatWarningsAsErrors: _packArgs.GetPropertyValue("TreatWarningsAsErrors") ?? string.Empty,
                 warningsAsErrors: _packArgs.GetPropertyValue("WarningsAsErrors") ?? string.Empty,
-                noWarn: _packArgs.GetPropertyValue("NoWarn") ?? string.Empty);
+                noWarn: _packArgs.GetPropertyValue("NoWarn") ?? string.Empty,
+                warningsNotAsErrors: _packArgs.GetPropertyValue("WarningsNotAsErrors") ?? string.Empty);
                 _packArgs.Logger = new PackCollectorLogger(_packArgs.Logger, _packArgs.WarningProperties);
             }
 
@@ -950,7 +951,7 @@ namespace NuGet.Commands
                 var fileName = Path.GetFileName(filePath);
 
                 return fileName.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase)
-                    || (fileName.StartsWith(".") && fileName.IndexOf('.', startIndex: 1) == -1);
+                    || (fileName.StartsWith(".", StringComparison.Ordinal) && fileName.IndexOf(".", startIndex: 1, StringComparison.Ordinal) == -1);
             });
 
             var matchedFiles = new HashSet<IPackageFile>(matches);
@@ -1030,27 +1031,27 @@ namespace NuGet.Commands
         internal void AnalyzePackage(PackageArchiveReader package)
         {
             IEnumerable<IPackageRule> packageRules = Rules;
-            IList<PackagingLogMessage> issues = new List<PackagingLogMessage>();
+            IList<PackagingLogMessage> logMessages = new List<PackagingLogMessage>();
 
             foreach (IPackageRule rule in packageRules)
             {
-                issues.AddRange(rule.Validate(package).OrderBy(p => p.Code.ToString(), StringComparer.CurrentCulture));
+                logMessages.AddRange(rule.Validate(package).OrderBy(p => p.Code.ToString(), StringComparer.CurrentCulture));
             }
 
-            if (issues.Count > 0)
+            if (logMessages.Count > 0)
             {
-                foreach (PackagingLogMessage issue in issues)
+                foreach (PackagingLogMessage logMessage in logMessages)
                 {
-                    PrintPackageIssue(issue);
+                    PrintPackageLogMessage(logMessage);
                 }
             }
         }
 
-        private void PrintPackageIssue(PackagingLogMessage issue)
+        private void PrintPackageLogMessage(PackagingLogMessage message)
         {
-            if (!string.IsNullOrEmpty(issue.Message))
+            if (!string.IsNullOrEmpty(message.Message))
             {
-                _packArgs.Logger.Log(issue);
+                _packArgs.Logger.Log(message);
             }
         }
 

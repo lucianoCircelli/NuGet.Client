@@ -32,8 +32,11 @@ namespace NuGet.Commands.FuncTest
 
     using LocalPackageArchiveDownloader = Protocol.LocalPackageArchiveDownloader;
 
+    [Collection(TestCollection.Name)]
     public class RestoreCommandTests
     {
+        private const string PrimarySourceName = "source";
+
         [Theory]
         [InlineData(NuGetConstants.V2FeedUrl, new Type[0])]
         [InlineData(NuGetConstants.V3FeedUrl, new[] { typeof(RemoteV3FindPackageByIdResourceProvider) })]
@@ -721,52 +724,39 @@ namespace NuGet.Commands.FuncTest
         public async Task RestoreCommand_FrameworkImport_WarnOnAsync()
         {
             // Arrange
-            var sources = new List<PackageSource>
-            {
-                new PackageSource(NuGetConstants.V3FeedUrl)
-            };
+            using var pathContext = new SimpleTestPathContext();
 
-            using (var packagesDir = TestDirectory.Create())
-            using (var projectDir = TestDirectory.Create())
-            {
-                var configJson = JObject.Parse(@"
-                {
-                    ""dependencies"": {
-                        ""Newtonsoft.Json"": ""7.0.1""
-                    },
-                    ""frameworks"": {
-                        ""dotnet"": {
-                            ""imports"": ""portable-net452+win81"",
-                            ""warn"": true
-                        }
-                    }
-                }");
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            packageA.AddFile("lib/net472/a.dll");
 
-                var specPath = Path.Combine(projectDir, "TestProject", "project.json");
-                var spec = JsonPackageSpecReader.GetPackageSpec(configJson.ToString(), "TestProject", specPath).EnsureProjectJsonRestoreMetadata();
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                packageA);
 
-                var logger = new TestLogger();
-                var request = new TestRestoreRequest(spec, sources, packagesDir, logger)
-                {
-                    LockFilePath = Path.Combine(projectDir, "project.lock.json")
-                };
+            var project1spec = ProjectTestHelpers.GetPackageSpec("Project1",
+                pathContext.SolutionRoot,
+                framework: "net5.0",
+                dependencyName: "a",
+                useAssetTargetFallback: true,
+                assetTargetFallbackFrameworks: "net472",
+                asAssetTargetFallback: false);
+            var logger = new TestLogger();
+            var command = new RestoreCommand(ProjectTestHelpers.CreateRestoreRequest(project1spec, pathContext, logger));
 
-                var command = new RestoreCommand(request);
-                var framework = new FallbackFramework(NuGetFramework.Parse("dotnet"), new List<NuGetFramework> { NuGetFramework.Parse("portable-net452+win81") });
-                var warning = "Package 'Newtonsoft.Json 7.0.1' was restored using '.NETPortable,Version=v0.0,Profile=net452+win81' instead of the project target framework '.NETPlatform,Version=v5.0'. This package may not be fully compatible with your project.";
+            // Act
+            var result = await command.ExecuteAsync();
 
-                // Act
-                var result = await command.ExecuteAsync();
-                await result.CommitAsync(logger, CancellationToken.None);
-                var runtimeAssemblies = GetRuntimeAssemblies(result.LockFile.Targets, framework, null);
-                var runtimeAssembly = runtimeAssemblies.FirstOrDefault();
-
-                // Assert
-                Assert.Equal(1, result.GetAllInstalled().Count);
-                Assert.Equal(0, logger.Errors);
-                Assert.Equal(1, logger.Warnings);
-                Assert.Equal(1, logger.Messages.Where(message => message.Contains(warning)).Count());
-            }
+            // Assert
+            result.Success.Should().BeTrue();
+            result.GetAllInstalled().Should().HaveCount(1, because: logger.ShowMessages());
+            result.LockFile.LogMessages.Should().HaveCount(1);
+            result.LockFile.LogMessages.Select(e => e.Code).Should().AllBeEquivalentTo(NuGetLogCode.NU1701);
+            result.LockFile.LogMessages.Select(e => e.Message).First().Should().
+                Be("Package 'a 1.0.0' was restored using '.NETFramework,Version=v4.7.2' instead of the project target framework 'net5.0'. This package may not be fully compatible with your project.");
+            result.LockFile.LogMessages.Single(e => e.LibraryId == "a");
+            logger.Errors.Should().Be(0, because: logger.ShowErrors());
+            logger.Warnings.Should().Be(1, because: logger.ShowWarnings());
         }
 
         [Fact]
@@ -1946,7 +1936,7 @@ namespace NuGet.Commands.FuncTest
         }
 
         [Fact]
-        public void RestoreCommand_PathTooLongException()
+        public async Task RestoreCommand_PathTooLongExceptionAsync()
         {
             // Arrange
             var sources = new List<PackageSource>
@@ -1991,7 +1981,7 @@ namespace NuGet.Commands.FuncTest
                 var command = new RestoreCommand(request);
 
                 // Act
-                new Func<Task>(async () => await command.ExecuteAsync()).Should().Throw<PathTooLongException>();
+                await Assert.ThrowsAsync<PathTooLongException>(command.ExecuteAsync);
             }
         }
 
@@ -2216,6 +2206,175 @@ namespace NuGet.Commands.FuncTest
                     // Assert
                     Assert.True(result.Success);
                 }
+            }
+        }
+
+        [Fact]
+        public async Task Restore_WhenMappingNewSourceDoesNotExist_FailsWithNU1100()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            var logger = new TestLogger();
+
+            PackageSpec project1Spec = ProjectTestHelpers.GetPackageSpec(
+                projectName: "Project1",
+                rootPath: pathContext.SolutionRoot,
+                framework: "net5.0",
+                dependencyName: packageA.Id);
+
+            PackageSpec project2Spec = ProjectTestHelpers.GetPackageSpec(
+                projectName: "Project2",
+                rootPath: pathContext.SolutionRoot,
+                framework: "net5.0",
+                dependencyName: packageA.Id);
+
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                packageA);
+
+            var restoreContext = new RestoreArgs()
+            {
+                Sources = new List<string>() { pathContext.PackageSource },
+                GlobalPackagesFolder = pathContext.UserPackagesFolder,
+                Log = logger,
+                CacheContext = new SourceCacheContext()
+            };
+
+            pathContext.Settings.AddPackageSourceMapping("InvalidSource", packageA.Id);
+            ISettings settings = Settings.LoadSettingsGivenConfigPaths(new string[] { pathContext.Settings.ConfigPath });
+
+            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(project1Spec, project2Spec);
+            var dgProvider = new DependencyGraphSpecRequestProvider(
+                new RestoreCommandProvidersCache(),
+                dgSpec,
+                settings); // Act
+
+            IReadOnlyList<RestoreSummaryRequest> restoreSummaryRequests = await dgProvider.CreateRequests(restoreContext);
+
+            foreach (RestoreSummaryRequest request in restoreSummaryRequests)
+            {
+                var command = new RestoreCommand(request.Request);
+                // Act
+                RestoreResult result = await command.ExecuteAsync();
+
+                // Assert
+                result.Success.Should().BeFalse(because: logger.ShowMessages());
+                result.LogMessages.Should().HaveCount(1);
+                result.LogMessages.Select(e => e.Code).Should().AllBeEquivalentTo(NuGetLogCode.NU1100);
+            }
+        }
+
+        [Fact]
+        public async Task Restore_WhenMappingNewSourceExists_Succeeds()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            var logger = new TestLogger();
+
+            PackageSpec project1Spec = ProjectTestHelpers.GetPackageSpec(projectName: "Project1",
+                                                                 rootPath: pathContext.SolutionRoot,
+                                                                 framework: "net5.0",
+                                                                 dependencyName: packageA.Id);
+
+            PackageSpec project2Spec = ProjectTestHelpers.GetPackageSpec(projectName: "Project2",
+                                                                 rootPath: pathContext.SolutionRoot,
+                                                                 framework: "net5.0",
+                                                                 dependencyName: packageA.Id);
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                packageA);
+
+            var restoreContext = new RestoreArgs()
+            {
+                Sources = new List<string>() { pathContext.PackageSource },
+                GlobalPackagesFolder = pathContext.UserPackagesFolder,
+                Log = logger,
+                CacheContext = new SourceCacheContext()
+            };
+
+            pathContext.Settings.AddPackageSourceMapping(PrimarySourceName, packageA.Id);
+            ISettings settings = Settings.LoadSettingsGivenConfigPaths(new string[] { pathContext.Settings.ConfigPath });
+
+            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(project1Spec, project2Spec);
+            var dgProvider = new DependencyGraphSpecRequestProvider(
+                new RestoreCommandProvidersCache(),
+                dgSpec,
+                settings); // Act
+
+            IReadOnlyList<RestoreSummaryRequest> restoreSummaryRequests = await dgProvider.CreateRequests(restoreContext);
+
+            foreach (RestoreSummaryRequest request in restoreSummaryRequests)
+            {
+                var command = new RestoreCommand(request.Request);
+
+                // Act
+                RestoreResult result = await command.ExecuteAsync();
+
+                // Assert
+                result.Success.Should().BeTrue(because: logger.ShowMessages());
+            }
+        }
+
+        [Fact]
+        public async Task RestoreCommand_RestoreWithPreviewSourceMapping_SucceedsAndLogs()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            var logger = new TestLogger();
+
+            PackageSpec project1Spec = ProjectTestHelpers.GetPackageSpec(projectName: "Project1",
+                                                                 rootPath: pathContext.SolutionRoot,
+                                                                 framework: "net5.0",
+                                                                 dependencyName: packageA.Id);
+
+            PackageSpec project2Spec = ProjectTestHelpers.GetPackageSpec(projectName: "Project2",
+                                                                 rootPath: pathContext.SolutionRoot,
+                                                                 framework: "net5.0",
+                                                                 dependencyName: packageA.Id);
+            project1Spec.RestoreMetadata.Sources.Add(new PackageSource(source: pathContext.PackageSource, name: PrimarySourceName));
+            project2Spec.RestoreMetadata.Sources.Add(new PackageSource(source: pathContext.PackageSource, name: PrimarySourceName));
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                packageA);
+
+            var restoreContext = new RestoreArgs()
+            {
+                Sources = new List<string>() { pathContext.PackageSource },
+                GlobalPackagesFolder = pathContext.UserPackagesFolder,
+                Log = logger,
+                CacheContext = new SourceCacheContext(),
+            };
+
+            pathContext.Settings.AddPackageSourceMapping(PrimarySourceName, packageA.Id);
+            ISettings settings = Settings.LoadSettingsGivenConfigPaths(new string[] { pathContext.Settings.ConfigPath });
+
+            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(project1Spec, project2Spec);
+            var dgProvider = new DependencyGraphSpecRequestProvider(
+                new RestoreCommandProvidersCache(),
+                dgSpec,
+                settings);
+
+            IReadOnlyList<RestoreSummaryRequest> restoreSummaryRequests = await dgProvider.CreateRequests(restoreContext);
+
+            foreach (RestoreSummaryRequest request in restoreSummaryRequests)
+            {
+                var command = new RestoreCommand(request.Request);
+                // Act
+                RestoreResult result = await command.ExecuteAsync();
+
+                // Assert
+                string loggerMessages = logger.ShowMessages();
+                result.Success.Should().BeTrue(because: loggerMessages);
+                loggerMessages.Should().Contain($"Package source mapping matches found for package ID '{packageA.Id}' are: '{PrimarySourceName}'.");
             }
         }
 
@@ -3202,6 +3361,7 @@ namespace NuGet.Commands.FuncTest
             result.LockFile.Libraries.Should().HaveCount(2);
             result.LockFile.Libraries.Should().Contain(e => e.Name.Equals("native"));
             result.LockFile.Libraries.Should().Contain(e => e.Name.Equals("native.child"));
+            result.LockFile.LogMessages.Should().HaveCount(0);
         }
 
         [Fact]
@@ -3266,6 +3426,58 @@ namespace NuGet.Commands.FuncTest
             result.LockFile.Libraries.Should().HaveCount(2);
             result.LockFile.Libraries.Should().Contain(e => e.Name.Equals("native"));
             result.LockFile.Libraries.Should().Contain(e => e.Name.Equals("native.child"));
+            result.LockFile.LogMessages.Should().HaveCount(0);
+        }
+
+        [Fact]
+        public async Task RestoreCommand_WithCPPCliProject_WithManagedProjectReference_Succeeds()
+        {
+            using var pathContext = new SimpleTestPathContext();
+            var configJson = JObject.Parse(@"
+                {
+                    ""frameworks"": {
+                        ""net5.0-windows7.0"": {
+                            ""targetAlias"" : ""net5.0-windows"",
+                            ""secondaryFramework"" : ""native"",
+                            ""dependencies"": {
+                                ""A"": {
+                                    ""version"" : ""1.0.0"",
+                                }
+                            }
+                        }
+                    }
+                }");
+
+            // Arrange
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                new SimpleTestPackageContext("A", "1.0.0"));
+
+            var sources = new List<PackageSource>
+                {
+                    new PackageSource(pathContext.PackageSource)
+                };
+            var logger = new TestLogger();
+
+            var projectDirectory = Path.Combine(pathContext.SolutionRoot, "TestProject");
+            var cachingSourceProvider = new CachingSourceProvider(new PackageSourceProvider(NullSettings.Instance));
+
+            var cppCliProject = JsonPackageSpecReader.GetPackageSpec(configJson.ToString(), "TestProject", Path.Combine(projectDirectory, "project.vcxproj")).WithTestRestoreMetadata();
+            var managedProject = ProjectTestHelpers.GetPackageSpec("ManageProject", pathContext.SolutionRoot, framework: "net5.0-windows7.0");
+            cppCliProject = cppCliProject.WithTestProjectReference(managedProject);
+            CreateFakeProjectFile(managedProject);
+
+            var command = new RestoreCommand(ProjectTestHelpers.CreateRestoreRequest(cppCliProject, new PackageSpec[] { managedProject }, pathContext, new TestLogger()));
+
+            // Preconditions
+            var result = await command.ExecuteAsync();
+            await result.CommitAsync(logger, CancellationToken.None);
+            result.Success.Should().BeTrue(because: logger.ShowMessages());
+            result.LockFile.Libraries.Should().HaveCount(2);
+            result.LockFile.Libraries.Should().Contain(e => e.Name.Equals("ManageProject"));
+            result.LockFile.Libraries.Should().Contain(e => e.Name.Equals("A"));
+            result.LockFile.LogMessages.Should().HaveCount(0);
         }
 
         [Fact]
@@ -3730,6 +3942,7 @@ namespace NuGet.Commands.FuncTest
             result.LockFile.Libraries.Should().HaveCount(0);
             result.LockFile.LogMessages.Should().HaveCount(1);
             result.LockFile.LogMessages.Select(e => e.Code).Should().AllBeEquivalentTo(NuGetLogCode.NU1301);
+            result.LockFile.Targets.Should().HaveCount(1);
         }
 
         [Fact]
@@ -3844,7 +4057,109 @@ namespace NuGet.Commands.FuncTest
             }
         }
 
-        static TestRestoreRequest CreateRestoreRequest(PackageSpec spec, string userPackagesFolder, List<PackageSource>  sources, ILogger logger)
+        [Fact]
+        public async Task Restore_WithHttpSource_Warns()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageA);
+            pathContext.Settings.AddSource("http-feed", "http://api.source/index.json");
+            pathContext.Settings.AddSource("https-feed", "https://api.source/index.json");
+
+            var logger = new TestLogger();
+            ISettings settings = Settings.LoadDefaultSettings(pathContext.SolutionRoot);
+            var project1Spec = ProjectTestHelpers.GetPackageSpec(settings, "Project1", pathContext.SolutionRoot, framework: "net5.0");
+            var request = ProjectTestHelpers.CreateRestoreRequest(project1Spec, pathContext, logger);
+            var command = new RestoreCommand(request);
+
+            // Act
+            var result = await command.ExecuteAsync();
+
+            // Assert
+            result.Success.Should().BeTrue(because: logger.ShowMessages());
+            result.LockFile.Libraries.Should().HaveCount(0);
+            result.LockFile.LogMessages.Should().HaveCount(1);
+            IAssetsLogMessage logMessage = result.LockFile.LogMessages[0];
+            logMessage.Code.Should().Be(NuGetLogCode.NU1803);
+            logMessage.Message.Should().Be("You are running the 'restore' operation with an 'HTTP' source, 'http://api.source/index.json'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.");
+        }
+
+        [Fact]
+        public async Task Restore_WithPackageWithoutAsset_Succeeds()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            packageA.Files.Clear();
+            packageA.AddFile("_._");
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageA);
+
+            var logger = new TestLogger();
+            ISettings settings = Settings.LoadDefaultSettings(pathContext.SolutionRoot);
+            var projectSpec = ProjectTestHelpers.GetPackageSpec("Project1",
+                pathContext.SolutionRoot,
+                framework: "net5.0",
+                dependencyName: "a",
+                useAssetTargetFallback: true,
+                assetTargetFallbackFrameworks: "net472",
+                asAssetTargetFallback: true);
+
+            var request = ProjectTestHelpers.CreateRestoreRequest(projectSpec, pathContext, logger);
+            var command = new RestoreCommand(request);
+
+            // Act
+            var result = await command.ExecuteAsync();
+
+            // Assert
+            result.Success.Should().BeTrue(because: logger.ShowMessages());
+            result.LockFile.Libraries.Should().HaveCount(1);
+            result.LockFile.LogMessages.Should().HaveCount(0);
+        }
+
+        [Fact]
+        public async Task RestoreCommand_WithWarningsNotAsErrorsAndTreatWarningsAsErrors_SucceedsAndWarns()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            packageA.AddFile("lib/net472/a.dll");
+
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                packageA);
+
+            var project1spec = ProjectTestHelpers.GetPackageSpec("Project1",
+                pathContext.SolutionRoot,
+                framework: "net5.0",
+                dependencyName: "a",
+                useAssetTargetFallback: true,
+                assetTargetFallbackFrameworks: "net472",
+                asAssetTargetFallback: false);
+            project1spec.RestoreMetadata.ProjectWideWarningProperties.AllWarningsAsErrors = true;
+            project1spec.RestoreMetadata.ProjectWideWarningProperties.WarningsNotAsErrors.Add(NuGetLogCode.NU1701);
+
+            var logger = new TestLogger();
+            var command = new RestoreCommand(ProjectTestHelpers.CreateRestoreRequest(project1spec, pathContext, logger));
+
+            // Act
+            RestoreResult result = await command.ExecuteAsync();
+
+            // Assert
+            result.Success.Should().BeTrue();
+            result.GetAllInstalled().Should().HaveCount(1, because: logger.ShowMessages());
+            result.LockFile.LogMessages.Should().HaveCount(1);
+            result.LockFile.LogMessages.Select(e => e.Code).Should().AllBeEquivalentTo(NuGetLogCode.NU1701);
+            result.LockFile.LogMessages.Select(e => e.Message).First().Should().
+                Be("Package 'a 1.0.0' was restored using '.NETFramework,Version=v4.7.2' instead of the project target framework 'net5.0'. This package may not be fully compatible with your project.");
+            result.LockFile.LogMessages.Single(e => e.LibraryId == "a");
+            logger.Errors.Should().Be(0, because: logger.ShowErrors());
+            logger.Warnings.Should().Be(1, because: logger.ShowWarnings());
+        }
+
+        static TestRestoreRequest CreateRestoreRequest(PackageSpec spec, string userPackagesFolder, List<PackageSource> sources, ILogger logger)
         {
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(spec);

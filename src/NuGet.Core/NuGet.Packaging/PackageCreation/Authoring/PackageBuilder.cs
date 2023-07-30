@@ -462,7 +462,7 @@ namespace NuGet.Packaging
             }
             else
             {
-                return Guid.NewGuid().ToString("N");
+                return Guid.NewGuid().ToString("N", provider: null);
             }
         }
 
@@ -809,7 +809,7 @@ namespace NuGet.Packaging
                 set.Add(file);
             }
 
-            var managedCodeConventions = new ManagedCodeConventions(new RuntimeGraph());
+            var managedCodeConventions = new ManagedCodeConventions(RuntimeGraph.Empty);
             var collection = new ContentItemCollection();
             collection.Load(set.Select(path => path.Replace('\\', '/')).ToArray());
 
@@ -830,7 +830,7 @@ namespace NuGet.Packaging
             };
             var warnPaths = new HashSet<string>();
 
-            var frameworksMissingPlatformVersion = new HashSet<string>();
+            var itemsWithFrameworkMissingPlatformVersion = new HashSet<string>();
             List<ContentItemGroup> targetedItemGroups = new();
             foreach (var pattern in frameworkPatterns)
             {
@@ -838,7 +838,7 @@ namespace NuGet.Packaging
                 ContentExtractor.GetContentForPattern(collection, pattern, targetedItemGroups);
                 foreach (ContentItemGroup group in targetedItemGroups)
                 {
-                    foreach (ContentItem item in group.Items)
+                    foreach (ContentItem item in group.Items.NoAllocEnumerate())
                     {
                         var framework = (NuGetFramework)item.Properties["tfm"];
                         if (framework == null)
@@ -848,15 +848,15 @@ namespace NuGet.Packaging
 
                         if (framework.HasPlatform && framework.PlatformVersion == FrameworkConstants.EmptyVersion)
                         {
-                            frameworksMissingPlatformVersion.Add(framework.GetShortFolderName());
+                            itemsWithFrameworkMissingPlatformVersion.Add(item.Path);
                         }
                     }
                 }
             }
 
-            if (frameworksMissingPlatformVersion.Any())
+            if (itemsWithFrameworkMissingPlatformVersion.Any())
             {
-                throw new PackagingException(NuGetLogCode.NU1012, string.Format(CultureInfo.CurrentCulture, Strings.MissingTargetPlatformVersionsFromIncludedFiles, string.Join(", ", frameworksMissingPlatformVersion.OrderBy(str => str))));
+                throw new PackagingException(NuGetLogCode.NU1012, string.Format(CultureInfo.CurrentCulture, Strings.MissingTargetPlatformVersionsFromIncludedFiles, string.Join(", ", itemsWithFrameworkMissingPlatformVersion.OrderBy(str => str))));
             }
         }
 
@@ -1008,7 +1008,7 @@ namespace NuGet.Packaging
             return entry;
         }
 
-        private ZipArchiveEntry CreatePackageFileEntry(ZipArchive package, string entryName, DateTimeOffset timeOffset, CompressionLevel compressionLevel, StringBuilder warningMessage)
+        private static ZipArchiveEntry CreatePackageFileEntry(ZipArchive package, string entryName, DateTimeOffset timeOffset, CompressionLevel compressionLevel, StringBuilder warningMessage)
         {
             var entry = package.CreateEntry(entryName, compressionLevel);
 

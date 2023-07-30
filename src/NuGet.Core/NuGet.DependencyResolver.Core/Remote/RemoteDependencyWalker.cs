@@ -35,7 +35,8 @@ namespace NuGet.DependencyResolver
                 runtimeGraph: runtimeGraph,
                 predicate: _ => (recursive ? DependencyResult.Acceptable : DependencyResult.Eclipsed, null),
                 outerEdge: null,
-                transitiveCentralPackageVersions: transitiveCentralPackageVersions);
+                transitiveCentralPackageVersions: transitiveCentralPackageVersions,
+                hasParentNodes: false);
 
             // do not calculate the hashset of the direct dependencies for cases when there are not any elements in the transitiveCentralPackageVersions queue
             var indexedDirectDependenciesKeyNames = new Lazy<HashSet<string>>(
@@ -70,10 +71,10 @@ namespace NuGet.DependencyResolver
             RuntimeGraph runtimeGraph,
             Func<LibraryRange, (DependencyResult dependencyResult, LibraryDependency conflictingDependency)> predicate,
             GraphEdge<RemoteResolveResult> outerEdge,
-            TransitiveCentralPackageVersions transitiveCentralPackageVersions)
+            TransitiveCentralPackageVersions transitiveCentralPackageVersions,
+            bool hasParentNodes)
         {
-            List<LibraryDependency> dependencies = null;
-            HashSet<string> runtimeDependencies = null;
+            HashSet<LibraryDependency> runtimeDependencies = null;
             List<Task<GraphNode<RemoteResolveResult>>> tasks = null;
 
             if (runtimeGraph != null && !string.IsNullOrEmpty(runtimeName))
@@ -105,42 +106,35 @@ namespace NuGet.DependencyResolver
                     else
                     {
                         // Otherwise it's a dependency of this node
-                        if (dependencies == null)
-                        {
-                            // Init dependency lists
-                            dependencies = new List<LibraryDependency>(1);
-                            runtimeDependencies = new HashSet<string>();
-                        }
-
-                        dependencies.Add(libraryDependency);
-                        runtimeDependencies.Add(libraryDependency.Name);
+                        runtimeDependencies ??= new HashSet<LibraryDependency>(LibraryDependencyNameComparer.OrdinalIgnoreCaseNameComparer);
+                        runtimeDependencies.Add(libraryDependency);
                     }
                 }
             }
 
-            var node = new GraphNode<RemoteResolveResult>(libraryRange)
+            // Resolve the dependency from the cache or sources
+            GraphItem<RemoteResolveResult> item = await ResolverUtility.FindLibraryCachedAsync(
+                _context.FindLibraryEntryCache,
+                libraryRange,
+                framework,
+                runtimeName,
+                _context,
+                CancellationToken.None);
+
+            bool hasInnerNodes = (item.Data.Dependencies.Count + (runtimeDependencies == null ? 0 : runtimeDependencies.Count)) > 0;
+            GraphNode<RemoteResolveResult> node = new GraphNode<RemoteResolveResult>(libraryRange, hasInnerNodes, hasParentNodes)
             {
-                // Resolve the dependency from the cache or sources
-                Item = await ResolverUtility.FindLibraryCachedAsync(
-                    _context.FindLibraryEntryCache,
-                    libraryRange,
-                    framework,
-                    runtimeName,
-                    _context,
-                    CancellationToken.None)
+                Item = item
             };
 
             Debug.Assert(node.Item != null, "FindLibraryCached should return an unresolved item instead of null");
 
             // Merge in runtime dependencies
-            if (dependencies?.Count > 0)
+            if (runtimeDependencies?.Count > 0)
             {
                 foreach (var nodeDep in node.Item.Data.Dependencies)
                 {
-                    if (runtimeDependencies?.Contains(nodeDep.Name, StringComparer.OrdinalIgnoreCase) != true)
-                    {
-                        dependencies.Add(nodeDep);
-                    }
+                    runtimeDependencies.Add(nodeDep);
                 }
 
                 // Create a new item on this node so that we can update it with the new dependencies from
@@ -150,7 +144,7 @@ namespace NuGet.DependencyResolver
                 {
                     Data = new RemoteResolveResult()
                     {
-                        Dependencies = dependencies,
+                        Dependencies = runtimeDependencies.ToList(),
                         Match = node.Item.Data.Match
                     }
                 };
@@ -184,10 +178,7 @@ namespace NuGet.DependencyResolver
                         // Dependency edge from the current node to the dependency
                         var innerEdge = new GraphEdge<RemoteResolveResult>(outerEdge, node.Item, dependency);
 
-                        if (tasks == null)
-                        {
-                            tasks = new List<Task<GraphNode<RemoteResolveResult>>>(1);
-                        }
+                        tasks ??= new List<Task<GraphNode<RemoteResolveResult>>>(1);
 
                         tasks.Add(CreateGraphNode(
                             dependency.LibraryRange,
@@ -196,12 +187,13 @@ namespace NuGet.DependencyResolver
                             runtimeGraph,
                             predicate,
                             innerEdge,
-                            transitiveCentralPackageVersions));
+                            transitiveCentralPackageVersions,
+                            hasParentNodes: false));
                     }
                     else
                     {
                         // In case of conflict because of a centrally managed version that is not direct dependency
-                        // the centrally managed package versions need to be added to the graph explicitelly as they are not added otherwise
+                        // the centrally managed package versions need to be added to the graph explicitly as they are not added otherwise
                         if (result.conflictingDependency != null &&
                             result.conflictingDependency.VersionCentrallyManaged &&
                             result.conflictingDependency.ReferenceType == LibraryDependencyReferenceType.None)
@@ -215,10 +207,10 @@ namespace NuGet.DependencyResolver
                         {
                             var dependencyNode = new GraphNode<RemoteResolveResult>(dependency.LibraryRange)
                             {
-                                Disposition = result.dependencyResult == DependencyResult.Cycle ? Disposition.Cycle : Disposition.PotentiallyDowngraded
+                                Disposition = result.dependencyResult == DependencyResult.Cycle ? Disposition.Cycle : Disposition.PotentiallyDowngraded,
+                                OuterNode = node
                             };
 
-                            dependencyNode.OuterNode = node;
                             node.InnerNodes.Add(dependencyNode);
                         }
                     }
@@ -250,7 +242,7 @@ namespace NuGet.DependencyResolver
         /// <summary>
         /// Walks up the package dependency graph to check for cycle, potentially degraded package versions <see cref="DependencyResult"/>.
         /// Cycle: A -> B -> A (cycle)
-        /// Downgrade: B depends up on D 1.0. Hence this method returns a downgrade while processing D 2.0 package. 
+        /// Downgrade: B depends up on D 1.0. Hence this method returns a downgrade while processing D 2.0 package.
         /// A -> B -> C -> D 2.0 (downgrade)
         ///        -> D 1.0
         /// </summary>
@@ -267,7 +259,7 @@ namespace NuGet.DependencyResolver
             //Walk up the tree starting from the grand parent upto root
             while (edge != null)
             {
-                (DependencyResult? dependencyResult, LibraryDependency conflictingDependency) = CalculateDependencyResult(edge.Item, edge.Edge, dependency.LibraryRange);
+                (DependencyResult? dependencyResult, LibraryDependency conflictingDependency) = CalculateDependencyResult(edge.Item, edge.Edge, dependency.LibraryRange, edge.OuterEdge == null);
 
                 if (dependencyResult.HasValue)
                     return (dependencyResult.Value, conflictingDependency);
@@ -287,7 +279,7 @@ namespace NuGet.DependencyResolver
 
             return library =>
             {
-                (DependencyResult? dependencyResult, LibraryDependency conflictingDependency) = CalculateDependencyResult(item, dependency, library);
+                (DependencyResult? dependencyResult, LibraryDependency conflictingDependency) = CalculateDependencyResult(item, dependency, library, node.OuterNode == null);
 
                 if (dependencyResult.HasValue)
                     return (dependencyResult.Value, conflictingDependency);
@@ -297,7 +289,7 @@ namespace NuGet.DependencyResolver
         }
 
         private static (DependencyResult? dependencyResult, LibraryDependency conflictingDependency) CalculateDependencyResult(
-            GraphItem<RemoteResolveResult> item, LibraryDependency parentDependency, LibraryRange childDependencyLibrary)
+            GraphItem<RemoteResolveResult> item, LibraryDependency parentDependency, LibraryRange childDependencyLibrary, bool isRoot)
         {
             if (StringComparer.OrdinalIgnoreCase.Equals(item.Data.Match.Library.Name, childDependencyLibrary.Name))
             {
@@ -306,6 +298,12 @@ namespace NuGet.DependencyResolver
 
             foreach (LibraryDependency d in item.Data.Dependencies)
             {
+                // Central transitive dependencies should be considered only for root nodes
+                if (!isRoot && d.ReferenceType == LibraryDependencyReferenceType.None)
+                {
+                    continue;
+                }
+
                 if (d != parentDependency && childDependencyLibrary.IsEclipsedBy(d.LibraryRange))
                 {
                     if (d.LibraryRange.VersionRange != null &&
@@ -474,7 +472,8 @@ namespace NuGet.DependencyResolver
                     runtimeGraph: runtimeGraph,
                     predicate: ChainPredicate(_ => (DependencyResult.Acceptable, null), rootNode, centralPackageVersionDependency),
                     outerEdge: null,
-                    transitiveCentralPackageVersions: transitiveCentralPackageVersions);
+                    transitiveCentralPackageVersions: transitiveCentralPackageVersions,
+                    hasParentNodes: true);
 
             node.OuterNode = rootNode;
             node.Item.IsCentralTransitive = true;
@@ -530,11 +529,26 @@ namespace NuGet.DependencyResolver
             {
                 lock (_transitiveCentralPackageVersions)
                 {
-                    foreach (var parent in _transitiveCentralPackageVersions[node.Item.Key.Name])
-                    {
-                        node.ParentNodes.Add(parent);
-                    }
+                    List<GraphNode<RemoteResolveResult>> graphNodes = _transitiveCentralPackageVersions[node.Item.Key.Name];
+                    node.ParentNodes.AddRange(graphNodes);
                 }
+            }
+        }
+
+        private class LibraryDependencyNameComparer : IEqualityComparer<LibraryDependency>
+        {
+            public static readonly IEqualityComparer<LibraryDependency> OrdinalIgnoreCaseNameComparer = new LibraryDependencyNameComparer();
+
+            private LibraryDependencyNameComparer() { }
+
+            public bool Equals(LibraryDependency x, LibraryDependency y)
+            {
+                return string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
+            }
+
+            public int GetHashCode(LibraryDependency obj)
+            {
+                return StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name);
             }
         }
     }

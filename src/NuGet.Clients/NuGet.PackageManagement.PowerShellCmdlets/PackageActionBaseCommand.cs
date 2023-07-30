@@ -18,6 +18,7 @@ using NuGet.ProjectManagement;
 using NuGet.ProjectManagement.Projects;
 using NuGet.Resolver;
 using NuGet.VisualStudio;
+using NuGetConsole.Host.PowerShell;
 using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.PackageManagement.PowerShellCmdlets
@@ -236,7 +237,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         {
             if (Source != null && Project is BuildIntegratedNuGetProject)
             {
-                var warning = string.Format(CultureInfo.CurrentUICulture, Resources.Warning_SourceNotRespectedForProjectType, nameof(Source), NuGetProject.GetUniqueNameOrName(Project));
+                var warning = string.Format(CultureInfo.CurrentCulture, Resources.Warning_SourceNotRespectedForProjectType, nameof(Source), NuGetProject.GetUniqueNameOrName(Project));
                 Log(MessageLevel.Warning, warning);
             }
         }

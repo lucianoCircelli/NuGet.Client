@@ -1,11 +1,8 @@
-<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>$(TargetFrameworksLibraryForSigning)</TargetFrameworks>
     <TargetFramework />
-    <NoWarn>$(NoWarn);CS1591;CS1573;CS0012</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS0012;RS0041</NoWarn>
     <PackageTags>nuget protocol</PackageTags>
     <PackProject>true</PackProject>
     <Shipping>true</Shipping>
@@ -21,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(NuGetCoreSrcDirectory)NuGet.Packaging\NuGet.Packaging.csproj" />
+    <ProjectReference Include="..\NuGet.Packaging\NuGet.Packaging.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,7 +43,4 @@
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.IO.Compression" />
   </ItemGroup>
-
-  <Import Project="$(BuildCommonDirectory)common.targets" />
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

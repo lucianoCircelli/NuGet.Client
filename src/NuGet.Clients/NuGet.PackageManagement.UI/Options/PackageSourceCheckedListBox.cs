@@ -6,14 +6,46 @@ using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
-using NuGet.PackageManagement.UI;
+using Microsoft.VisualStudio.Imaging;
+using Microsoft.VisualStudio.Imaging.Interop;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using NuGet.Configuration;
 using NuGet.VisualStudio.Internal.Contracts;
+using GelUtilities = Microsoft.Internal.VisualStudio.PlatformUI.Utilities;
 
-namespace NuGet.Options
+namespace NuGet.PackageManagement.UI.Options
 {
     internal class PackageSourceCheckedListBox : CheckedListBox
     {
         public Size CheckBoxSize { get; set; }
+
+        private static Icon WarningIcon { get; set; }
+
+        private Icon GetWarningIcon()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (WarningIcon == null)
+            {
+                ImageAttributes attributes = new ImageAttributes
+                {
+                    StructSize = Marshal.SizeOf(typeof(ImageAttributes)),
+                    ImageType = (uint)_UIImageType.IT_Icon,
+                    Format = (uint)_UIDataFormat.DF_WinForms,
+                    LogicalWidth = 16,
+                    LogicalHeight = 16,
+                    Flags = (uint)_ImageAttributesFlags.IAF_RequiredFlags
+                };
+
+                IVsImageService2 imageService = (IVsImageService2)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(SVsImageService));
+                IVsUIObject uIObj = imageService.GetImage(KnownMonikers.StatusWarning, attributes);
+
+                WarningIcon = (Icon)GelUtilities.GetObjectData(uIObj);
+            }
+
+            return WarningIcon;
+        }
 
         public override int ItemHeight
         {
@@ -36,6 +68,8 @@ namespace NuGet.Options
 
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             var currentListBox = this;
             var graphics = e.Graphics;
             e.DrawBackground();
@@ -86,7 +120,7 @@ namespace NuGet.Options
                         // draw each package source as
                         //
                         // [checkbox] Name
-                        //            Source (italics)
+                        //            WarningIcon Source (italics)
 
                         var textWidth = e.Bounds.Width - checkBoxSize.Width - edgeMargin - textMargin;
 
@@ -101,8 +135,24 @@ namespace NuGet.Options
 
                         graphics.DrawString(currentItem.Name, e.Font, foreBrush, nameBounds, drawFormat);
 
+                        var packageSource = new PackageSource(currentItem.Source, currentItem.Name);
+                        var isSourceHttp = packageSource.IsHttp && !packageSource.IsHttps;
+                        Rectangle warningBounds = default;
+
+                        if (isSourceHttp)
+                        {
+                            var warningIcon = GetWarningIcon();
+
+                            warningBounds = new Rectangle(
+                                nameBounds.Left,
+                                nameBounds.Bottom,
+                                warningIcon.Width,
+                                warningIcon.Height);
+                            graphics.DrawIcon(warningIcon, warningBounds);
+                        }
+
                         var sourceBounds = new Rectangle(
-                            nameBounds.Left,
+                            isSourceHttp ? warningBounds.Right : nameBounds.Left,
                             nameBounds.Bottom,
                             textWidth,
                             e.Bounds.Bottom - nameBounds.Bottom);

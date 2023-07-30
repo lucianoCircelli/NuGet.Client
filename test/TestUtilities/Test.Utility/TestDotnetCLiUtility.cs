@@ -6,14 +6,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.Protocol;
-using NuGet.Test.Utility;
 using NuGet.Versioning;
 
 namespace NuGet.Test.Utility
@@ -25,42 +21,18 @@ namespace NuGet.Test.Utility
         internal static string CliDirSource { get; private set; }
         internal static string SdkDirSource { get; private set; }
 
-        // For non fullframework code path, we could dynamically determine which SDK version to copy by checking the TFM of TestDotnetCLiUtility.dll and the dotnet.dll,
-        // so there is no need to pass sdkVersion or sdkTfm.
-        // But for fullframework code path, the test project dll could not be used to dynamically determine which SDK version to copy,
-        // so we need to specify the sdkVersion and sdkTfm in order to patch the right version of SDK.
-        public static TestDirectory CopyAndPatchLatestDotnetCli(string sdkVersion = null, string sdkTfm = null)
+#if !IS_DESKTOP
+        // For non fullframework code path, we could dynamically determine which SDK version to copy by checking the TFM of test project assembly and the dotnet.dll.
+        public static TestDirectory CopyAndPatchLatestDotnetCli(string testAssemblyPath)
         {
-
             CliDirSource = Path.GetDirectoryName(TestFileSystemUtility.GetDotnetCli());
             SdkDirSource = Path.Combine(CliDirSource, "sdk" + Path.DirectorySeparatorChar);
 
-            if (sdkVersion == null)
-            {
-#if !IS_DESKTOP
-                // Dynamically determine which SDK version to copy
-                SdkVersion = GetSdkToTest();
-#endif
-            }
-            else
-            {
-                // Use specified sdkVersion
-                SdkVersion = GetSdkToTest(sdkVersion);
-            }
+            // Dynamically determine which SDK version to copy
+            SdkVersion = GetSdkToTestByAssemblyPath(testAssemblyPath);
 
-
-            if (sdkTfm == null)
-            {
-#if !IS_DESKTOP
-                // Dynamically determine the TFM of the dotnet.dll
-                SdkTfm = AssemblyReader.GetTargetFramework(Path.Combine(SdkDirSource, SdkVersion, "dotnet.dll"));
-#endif
-            }
-            else
-            {
-                // Use specified sdkVersion
-                SdkTfm = NuGetFramework.Parse(sdkTfm);
-            }
+            // Dynamically determine the TFM of the dotnet.dll
+            SdkTfm = AssemblyReader.GetTargetFramework(Path.Combine(SdkDirSource, SdkVersion, "dotnet.dll"));
 
             var cliDirDestination = TestDirectory.Create();
             CopyLatestCliToTestDirectory(cliDirDestination);
@@ -68,11 +40,30 @@ namespace NuGet.Test.Utility
 
             return cliDirDestination;
         }
+#else
+        // For fullframework code path, the test project dll could not be used to dynamically determine which SDK version to copy,
+        // so we need to specify the sdkVersion and sdkTfm in order to patch the right version of SDK.
+        public static TestDirectory CopyAndPatchLatestDotnetCli(string sdkVersion, string sdkTfm)
+        {
+            CliDirSource = Path.GetDirectoryName(TestFileSystemUtility.GetDotnetCli());
+            SdkDirSource = Path.Combine(CliDirSource, "sdk" + Path.DirectorySeparatorChar);
+
+            // Use specified sdkVersion
+            SdkVersion = GetSdkToTestByVersion(sdkVersion);
+
+            // Use specified sdkTfm
+            SdkTfm = NuGetFramework.Parse(sdkTfm);
+
+            var cliDirDestination = TestDirectory.Create();
+            CopyLatestCliToTestDirectory(cliDirDestination);
+            UpdateCliWithLatestNuGetAssemblies(cliDirDestination);
+
+            return cliDirDestination;
+        }
+#endif
 
         private static void CopyLatestCliToTestDirectory(string destinationDir)
         {
-            WriteGlobalJson(destinationDir);
-
             var sdkPath = Path.Combine(SdkDirSource, SdkVersion + Path.DirectorySeparatorChar);
             var fallbackFolderPath = Path.Combine(SdkDirSource, "NuGetFallbackFolder");
 
@@ -108,11 +99,11 @@ namespace NuGet.Test.Utility
         }
 
 #if !IS_DESKTOP
-        // Dynamically determine which SDK version to copy by checking the TFM of TestDotnetCLiUtility.dll and the dotnet.dll.
-        private static string GetSdkToTest()
+        // Dynamically determine which SDK version to copy by checking the TFM of test project assembly and the dotnet.dll.
+        private static string GetSdkToTestByAssemblyPath(string testAssemblyPath)
         {
             // The TFM we're testing
-            var testTfm = AssemblyReader.GetTargetFramework(typeof(TestDotnetCLiUtility).Assembly.Location);
+            var testTfm = AssemblyReader.GetTargetFramework(testAssemblyPath);
 
             var selectedVersion =
                 Directory.EnumerateDirectories(SdkDirSource) // get all directories in sdk folder
@@ -134,6 +125,14 @@ namespace NuGet.Test.Utility
 
             if (selectedVersion == null)
             {
+                selectedVersion = Directory.EnumerateDirectories(SdkDirSource)
+                    .Select(Path.GetFileName)
+                    .OrderByDescending(directoryName => NuGetVersion.Parse(directoryName))
+                    .FirstOrDefault();
+            }
+
+            if (selectedVersion == null)
+            {
                 var message = $@"Could not find suitable SDK to test in {SdkDirSource}
 TFM being tested: {testTfm.DotNetFrameworkName}
 SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Select(Path.GetFileName).Where(d => !string.Equals(d, "NuGetFallbackFolder", StringComparison.OrdinalIgnoreCase)))}";
@@ -143,9 +142,9 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
 
             return selectedVersion;
         }
-#endif
+#else
         // Use specified sdkVersion(could be just a major version) to determine which SDK version to copy.
-        private static string GetSdkToTest(string sdkVersion)
+        private static string GetSdkToTestByVersion(string sdkVersion)
         {
             var selectedVersion =
                 Directory.EnumerateDirectories(SdkDirSource) // get all directories in sdk folder
@@ -175,7 +174,7 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
 
             return selectedVersion;
         }
-
+#endif
         private static void UpdateCliWithLatestNuGetAssemblies(string cliDirectory)
         {
             var artifactsDirectory = TestFileSystemUtility.GetArtifactsDirectoryInRepo();
@@ -195,13 +194,10 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
 
         private static void CopyRestoreArtifacts(string artifactsDirectory, string pathToSdkInCli, string configuration)
         {
-            const string restoreProjectName = "NuGet.Build.Tasks";
-            const string restoreTargetsName = "NuGet.targets";
-            const string restoreTargetsExtName = "NuGet.RestoreEx.targets";
+            var fileExtensions = new[] { ".dll", ".pdb", ".targets" };
 
-            var sdkDependencies = new List<string> { restoreProjectName, "NuGet.Versioning", "NuGet.Protocol", "NuGet.ProjectModel", "NuGet.Packaging", "NuGet.LibraryModel", "NuGet.Frameworks", "NuGet.DependencyResolver.Core", "NuGet.Configuration", "NuGet.Common", "NuGet.Commands", "NuGet.CommandLine.XPlat", "NuGet.Credentials", "NuGet.Build.Tasks.Console" };
+            var sdkDependencies = new List<string> { "NuGet.Build.Tasks.Console", "NuGet.CommandLine.XPlat" };
 
-            // Copy rest of the NuGet assemblies.
             foreach (var projectName in sdkDependencies)
             {
                 var projectArtifactsBinFolder = Path.Combine(artifactsDirectory, projectName, "bin", configuration);
@@ -209,30 +205,51 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
                 var tfmToCopy = GetTfmToCopy(projectArtifactsBinFolder);
                 var frameworkArtifactsFolder = new DirectoryInfo(Path.Combine(projectArtifactsBinFolder, tfmToCopy));
 
-                var fileName = projectName + ".dll";
-                File.Copy(
-                        sourceFileName: Path.Combine(frameworkArtifactsFolder.FullName, fileName),
-                        destFileName: Path.Combine(pathToSdkInCli, fileName),
-                        overwrite: true);
-                // Copy the restore targets.
-                if (projectName.Equals(restoreProjectName))
+                foreach (string fileExtension in fileExtensions)
                 {
-                    File.Copy(
-                        sourceFileName: Path.Combine(frameworkArtifactsFolder.FullName, restoreTargetsName),
-                        destFileName: Path.Combine(pathToSdkInCli, restoreTargetsName),
-                        overwrite: true);
-                    File.Copy(
-                        sourceFileName: Path.Combine(frameworkArtifactsFolder.FullName, restoreTargetsExtName),
-                        destFileName: Path.Combine(pathToSdkInCli, restoreTargetsExtName),
-                        overwrite: true);
+                    foreach (FileInfo file in frameworkArtifactsFolder.EnumerateFiles($"*{fileExtension}"))
+                    {
+                        var dependencyTargetPath = Path.Combine(pathToSdkInCli, file.Name);
+
+                        if (file.Name.Contains("NuGet"))
+                        {
+                            file.CopyTo(dependencyTargetPath, overwrite: true);
+                        }
+                        else
+                        {
+                            if (File.Exists(dependencyTargetPath)) // If a dependency exists in the SDK, only copy it if our version is higher than the SDK version.
+                            {
+                                var targetFileVersion = new Version(FileVersionInfo.GetVersionInfo(dependencyTargetPath).FileVersion);
+                                var fileToPatchVersion = new Version(FileVersionInfo.GetVersionInfo(file.FullName).FileVersion);
+                                if (fileToPatchVersion > targetFileVersion)
+                                {
+                                    file.CopyTo(dependencyTargetPath, overwrite: true);
+                                }
+                            }
+                            else // If a dependency does not exist in the SDK, copy it, as we'll need it.
+                            {
+                                file.CopyTo(dependencyTargetPath, overwrite: true);
+                            }
+                        }
+                    }
+                }
+
+                // Update NuGet.CommandLine.XPlat.runtimeconfig.json so that our dependencies are loaded correctly
+                FileInfo runtimeConfigJsonFile = new FileInfo(Path.Combine(pathToSdkInCli, $"{projectName}.runtimeconfig.json"));
+
+                JObject jObject = runtimeConfigJsonFile.Exists ? JsonUtility.LoadJson(runtimeConfigJsonFile.OpenText()) : new JObject();
+
+                jObject["runtimeOptions"]["configProperties"]["Microsoft.NETCore.DotNetHostPolicy.SetAppPaths"] = true;
+
+                using (StreamWriter streamWriter = File.CreateText(runtimeConfigJsonFile.FullName))
+                using (JsonTextWriter writer = new JsonTextWriter(streamWriter)
+                {
+                    Formatting = Formatting.Indented
+                })
+                {
+                    jObject.WriteTo(writer);
                 }
             }
-
-            // temp: delete once the .NET SDK ships Newtonsoft.Json 13.0.1 or higher. Tracked by https://github.com/NuGet/Home/issues/11135
-            File.Copy(
-                sourceFileName: typeof(Newtonsoft.Json.JsonSerializer).Assembly.Location,
-                destFileName: Path.Combine(pathToSdkInCli, "Newtonsoft.Json.dll"),
-                overwrite: true);
         }
 
         private static string GetTfmToCopy(string projectArtifactsBinFolder)
@@ -289,7 +306,7 @@ project TFMs found: {string.Join(", ", compiledTfms.Keys.Select(k => k.ToString(
                 {
                     File.Copy(sourceFileName: Path.Combine(packProjectCoreArtifactsDirectory.FullName, "ilmerge", packFileName),
                         destFileName: Path.Combine(packAssemblyDestinationDirectory, packFileName),
-                        overwrite:true);
+                        overwrite: true);
                 }
             }
             else
@@ -312,7 +329,12 @@ project TFMs found: {string.Join(", ", compiledTfms.Keys.Select(k => k.ToString(
 
         public static void WriteGlobalJson(string path)
         {
-            string globalJsonText = $"{{\"sdk\": {{\"version\": \"{SdkVersion}\"}}}}";
+            string globalJsonText = $@"{{
+  ""sdk"": {{
+    ""version"": ""{SdkVersion}"",
+    ""allowPrerelease"": true
+  }}
+}}";
             var globalJsonPath = Path.Combine(path, "global.json");
             File.WriteAllText(globalJsonPath, globalJsonText);
         }

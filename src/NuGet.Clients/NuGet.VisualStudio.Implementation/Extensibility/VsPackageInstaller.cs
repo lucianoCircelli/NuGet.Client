@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -277,7 +278,7 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
             const string eventName = nameof(IVsPackageInstaller) + "." + nameof(InstallPackagesFromVSExtensionRepository) + ".1";
             using var _ = NuGetETW.ExtensibilityEventSource.StartStopEvent(eventName);
 
-            InstallPackagesFromVSExtensionRepository(
+            InstallPackagesFromVSExtensionRepositoryImpl(
                 extensionId,
                 isPreUnzipped,
                 skipAssemblyReferences,
@@ -291,7 +292,7 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
             const string eventName = nameof(IVsPackageInstaller) + "." + nameof(InstallPackagesFromVSExtensionRepository) + ".2";
             using var _ = NuGetETW.ExtensibilityEventSource.StartStopEvent(eventName);
 
-            InstallPackagesFromVSExtensionRepository(
+            InstallPackagesFromVSExtensionRepositoryImpl(
                 extensionId,
                 isPreUnzipped,
                 skipAssemblyReferences,
@@ -425,7 +426,7 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
                 if (!Uri.TryCreate(source, UriKind.Absolute, out result))
                 {
                     throw new ArgumentException(
-                        string.Format(VsResources.InvalidSource, source),
+                        string.Format(CultureInfo.CurrentCulture, VsResources.InvalidSource, source),
                         nameof(source));
                 }
 

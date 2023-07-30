@@ -7,10 +7,8 @@ $ConfigureJson = Join-Path $Artifacts configure.json
 $BuiltInVsWhereExe = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $VSVersion = $env:VisualStudioVersion
 $DotNetExe = Join-Path $CLIRoot 'dotnet.exe'
-$ILMerge = Join-Path $NuGetClientRoot 'packages\ilmerge\2.14.1208\tools\ILMerge.exe'
 
 Set-Alias dotnet $DotNetExe
-Set-Alias ilmerge $ILMerge
 
 Function Read-PackageSources {
     param($NuGetConfig)
@@ -154,44 +152,33 @@ Function Update-Submodules {
 Function Install-DotnetCLI {
     [CmdletBinding()]
     param(
-        [switch]$Force
+        [switch]$Force,
+        [switch]$SkipDotnetInfo
     )
-    $MSBuildExe = Get-MSBuildExe
-
-    $CmdOutLines = ((& $msbuildExe $NuGetClientRoot\build\config.props /v:m /nologo /t:GetCliBranchForTesting) | Out-String).Trim()
-    $CliBranchListForTesting = ($CmdOutLines -split [Environment]::NewLine)[-1]
-    $CliBranchList = $CliBranchListForTesting -split ';'
 
     $DotNetInstall = Join-Path $CLIRoot 'dotnet-install.ps1'
 
     #If "-force" is specified, or dotnet.exe under cli folder doesn't exist, create cli folder and download dotnet-install.ps1 into cli folder.
     if ($Force -or -not (Test-Path $DotNetExe)) {
-        Trace-Log "Downloading .NET CLI '$CliBranchList'"
+        Trace-Log "Downloading .NET CLI install script"
 
         New-Item -ItemType Directory -Force -Path $CLIRoot | Out-Null
 
         Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $DotNetInstall
     }
 
+    if (-not ([string]::IsNullOrEmpty($env:DOTNET_SDK_VERSIONS))) {
+        Trace-Log "Using environment variable DOTNET_SDK_VERSIONS instead of DotNetSdkVersions.txt.  Value: '$env:DOTNET_SDK_VERSIONS'"
+        $CliBranchList = $env:DOTNET_SDK_VERSIONS -Split ";"
+    } else {
+        $CliBranchList = (Get-Content -Path "$NuGetClientRoot\build\DotNetSdkVersions.txt")
+    }
+
     ForEach ($CliBranch in $CliBranchList) {
         $CliBranch = $CliBranch.trim()
-        $CliChannelAndVersion = $CliBranch -split ":"
-
-        $Channel = $CliChannelAndVersion[0].trim()
-        if ($CliChannelAndVersion.count -eq 1) {
-            $Version = 'latest'
+        if ($CliBranch.StartsWith("#") -or $CliBranch.Equals("")) {
+            continue
         }
-        else {
-            $Version = $CliChannelAndVersion[1].trim()
-        }
-
-        $cli = @{
-            Root    = $CLIRoot
-            Version = $Version
-            Channel = $Channel
-        }
-
-        $DotNetExe = Join-Path $cli.Root 'dotnet.exe';
 
         if ([Environment]::Is64BitOperatingSystem) {
             $arch = "x64";
@@ -200,95 +187,39 @@ Function Install-DotnetCLI {
             $arch = "x86";
         }
 
-        if ($Version -eq 'latest') {
-
-            # When installing latest, we firstly check the latest version from the server against what we have installed locally. This also allows us to check the SDK was correctly installed.
-            # Get the latest specific version number for a certain channel from url like : https://dotnetcli.blob.core.windows.net/dotnet/Sdk/release/3.0.1xx/latest.version
-            $latestVersionLink = "https://dotnetcli.blob.core.windows.net/dotnet/Sdk/" + $Channel + "/latest.version"
-            $latestVersionFile = Invoke-RestMethod -Method Get -Uri $latestVersionLink
-
-            $stringReader = New-Object -TypeName System.IO.StringReader -ArgumentList $latestVersionFile
-            [int]$count = 0
-            while ( $line = $stringReader.ReadLine() ) {
-                if ($count -eq 1) {
-                    $expectedVersion = $line.trim()
-                }
-                $count += 1
-            }
-
-            $httpGetUrl = "https://dotnetcli.blob.core.windows.net/dotnet/Sdk/" + $expectedVersion + "/productVersion.txt"
-            $versionFile = Invoke-RestMethod -Method Get -Uri $httpGetUrl
-
-            $stringReader = New-Object -TypeName System.IO.StringReader -ArgumentList $versionFile
-            [int]$count = 0
-            while ( $line = $stringReader.ReadLine() ) {
-                if ($count -eq 1) {
-                    $specificVersion = $line.trim()
-                }
-                $count += 1
-            }
+        Trace-Log "$DotNetInstall $CliBranch -InstallDir $CLIRoot -Architecture $arch -NoPath"
+ 
+        & powershell $DotNetInstall $CliBranch -InstallDir $CLIRoot -Architecture $arch -NoPath
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw "dotnet-install.ps1 exited with non-zero exit code"
         }
-        else {
-            $specificVersion = $Version
-        }
+    }
+    
+    if (-not (Test-Path $DotNetExe)) {
+        Error-Log "Unable to find dotnet.exe. The CLI install may have failed." -Fatal
+    }
 
-        Trace-Log "The version of SDK should be installed is : $specificVersion"
-
-        $probeDotnetPath = Join-Path (Join-Path $cli.Root sdk)  $specificVersion
-
-        Trace-Log "Probing folder : $probeDotnetPath"
-
-        #If "-force" is specified, or folder with specific version doesn't exist, the download command will run"
-        if ($Force -or -not (Test-Path $probeDotnetPath)) {
-            $channelMainVersion = ""
-            foreach($channelPart in $cli.Channel.Split('/'))
-            {
-                if ($channelPart -match "\d+.*")
-                {
-                    $channelMainVersion = $channelPart.Split('.')[0]
-                    Break
-                }
-            }
-
-            if ([string]::IsNullOrEmpty($channelMainVersion)) {
-                Error-Log "Unable to detect channel version for dotnetinstall.ps1. The CLI install cannot be initiated." -Fatal
-            }
-
-            Trace-Log "$DotNetInstall -Channel $($channelMainVersion) -InstallDir $($cli.Root) -Version $($cli.Version) -Architecture $arch -NoPath"
-            # dotnet-install might make http requests that fail, but it handles those errors internally
-            # However, Invoke-BuildStep checks if any error happened, ever. Hence we need to run dotnet-install
-            # in a different process, to avoid treating their handled errors as build errors.
-            & powershell $DotNetInstall -Channel $channelMainVersion -InstallDir $cli.Root -Version $cli.Version -Architecture $arch -NoPath
-            if ($LASTEXITCODE -ne 0)
-            {
-                throw "dotnet-install.ps1 exited with non-zero exit code"
-            }
-        }
-
-        if (-not (Test-Path $DotNetExe)) {
-            Error-Log "Unable to find dotnet.exe. The CLI install may have failed." -Fatal
-        }
-        if (-not(Test-Path $probeDotnetPath)) {
-            Error-Log "Unable to find specific version of sdk. The CLI install may have failed." -Fatal
-        }
-
+    if ($SkipDotnetInfo -ne $true) {
         # Display build info
         & $DotNetExe --info
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw "dotnet --info exited with non-zero exit code"
+        }
     }
-
-    # Install the 2.x runtime because our tests target netcoreapp2x
-    Trace-Log "$DotNetInstall -Runtime dotnet -Channel 3.1 -InstallDir $CLIRoot -NoPath"
-    # dotnet-install might make http requests that fail, but it handles those errors internally
-    # However, Invoke-BuildStep checks if any error happened, ever. Hence we need to run dotnet-install
-    # in a different process, to avoid treating their handled errors as build errors.
-    & powershell $DotNetInstall -Runtime dotnet -Channel 3.1 -InstallDir $CLIRoot -NoPath
-    if ($LASTEXITCODE -ne 0)
-    {
-        throw "dotnet-install.ps1 exited with non-zero exit code"
+    
+    if ($env:CI -eq "true") {
+        Write-Host "##vso[task.setvariable variable=DOTNET_ROOT;isOutput=false;issecret=false;]$CLIRoot"
+        Write-Host "##vso[task.setvariable variable=DOTNET_MULTILEVEL_LOOKUP;isOutput=false;issecret=false;]0"
+        Write-Host "##vso[task.prependpath]$CLIRoot"
+    } else {
+        $env:DOTNET_ROOT=$CLIRoot
+        $env:DOTNET_MULTILEVEL_LOOKUP=0
+        if (-not $env:path.Contains($CLIRoot)) {
+            $env:path = $CLIRoot + ";" + $env:path
+        }
     }
-
-    # Display build info
-    & $DotNetExe --info
 }
 
 Function Get-LatestVisualStudioRoot {
@@ -374,20 +305,5 @@ Function Clear-Nupkgs {
     if (Test-Path $Nupkgs) {
         Trace-Log 'Cleaning nupkgs folder'
         Remove-Item $Nupkgs\*.nupkg -Force
-    }
-}
-
-Function Restore-SolutionPackages {
-    [CmdletBinding()]
-    param(
-    )
-    $opts = 'msbuild', '-t:restore'
-    $opts += "${NuGetClientRoot}\build\bootstrap.proj"
-
-    Trace-Log "Restoring packages @""$NuGetClientRoot"""
-    Trace-Log "dotnet $opts"
-    & dotnet $opts
-    if (-not $?) {
-        Error-Log "Restore failed @""$NuGetClientRoot"". Code: ${LASTEXITCODE}"
     }
 }

@@ -153,7 +153,7 @@ namespace NuGet.VisualStudio.Implementation.Test.Extensibility
                 throw new NotImplementedException();
             }
 
-            public override Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(CancellationToken token)
+            public override Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(bool includeTransitiveOrigins, CancellationToken token)
             {
                 var transitivePackages = TransitivePackages.Select(p => new TransitivePackageReference(p));
 
@@ -197,20 +197,17 @@ namespace NuGet.VisualStudio.Implementation.Test.Extensibility
                 throw new NotImplementedException();
             }
 
-            protected override IEnumerable<PackageReference> ResolvedInstalledPackagesList(IEnumerable<LibraryDependency> libraries, NuGetFramework targetFramework, IReadOnlyList<LockFileTarget> targets, List<PackageReference> installedPackages)
+            protected override IEnumerable<PackageReference> ResolvedInstalledPackagesList(IEnumerable<LibraryDependency> libraries, NuGetFramework targetFramework, IList<LockFileTarget> targets, List<PackageReference> installedPackages)
             {
                 throw new NotImplementedException();
             }
 
-            protected override IReadOnlyList<PackageReference> ResolvedTransitivePackagesList(NuGetFramework targetFramework, IReadOnlyList<LockFileTarget> targets, List<PackageReference> installedPackages, List<PackageReference> transitivePackages)
+            protected override IReadOnlyList<PackageReference> ResolvedTransitivePackagesList(NuGetFramework targetFramework, IList<LockFileTarget> targets, List<PackageReference> installedPackages, List<PackageReference> transitivePackages)
             {
                 throw new NotImplementedException();
             }
 
-            protected override (List<PackageReference> installedPackagesCopy, List<PackageReference> transitivePackagesCopy) GetInstalledAndTransitivePackagesCacheCopy()
-            {
-                return (new List<PackageReference>(InstalledPackages), new List<PackageReference>(TransitivePackages));
-            }
+            protected override List<PackageReference> GetCollectionCopy(List<PackageReference> collection) => new(collection);
         }
     }
 }

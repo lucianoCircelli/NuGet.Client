@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using NuGet.Packaging.Licenses;
 using NuGet.Shared;
@@ -67,7 +68,7 @@ namespace NuGet.Packaging
             }
 
             return Type == other.Type &&
-                   License.Equals(other.License) &&
+                   License.Equals(other.License, StringComparison.Ordinal) &&
                    Equals(LicenseExpression, other.LicenseExpression) &&
                    EqualityUtility.SequenceEqualWithNullCheck(WarningsAndErrors, other.WarningsAndErrors) &&
                    Version == other.Version;
@@ -82,7 +83,7 @@ namespace NuGet.Packaging
         {
             var combiner = new HashCodeCombiner();
 
-            combiner.AddObject(Type);
+            combiner.AddStruct(Type);
             combiner.AddObject(License);
             combiner.AddObject(LicenseExpression);
             combiner.AddSequence(WarningsAndErrors);
@@ -111,7 +112,7 @@ namespace NuGet.Packaging
 
         private static string GenerateLicenseServiceLink(string license)
         {
-            return new Uri(string.Format(LicenseServiceLinkTemplate, license)).AbsoluteUri;
+            return new Uri(string.Format(CultureInfo.InvariantCulture, LicenseServiceLinkTemplate, license)).AbsoluteUri;
         }
     }
 

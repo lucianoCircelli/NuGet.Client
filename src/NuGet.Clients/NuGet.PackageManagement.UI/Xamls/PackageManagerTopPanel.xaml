@@ -17,6 +17,7 @@
 
       <CollectionViewSource x:Key="cvsPackageSources">
         <CollectionViewSource.SortDescriptions>
+          <scm:SortDescription PropertyName="PriorityOrder" Direction="Ascending" />
           <scm:SortDescription PropertyName="SourceName" Direction="Ascending" />
         </CollectionViewSource.SortDescriptions>
       </CollectionViewSource>
@@ -275,7 +276,7 @@
             </ToolTip>
           </ComboBox.ToolTip>
           <ComboBox.ItemContainerStyle>
-            <Style TargetType="{x:Type ComboBoxItem}" BasedOn="{StaticResource ComboBoxItemStyle}">
+            <Style TargetType="{x:Type ComboBoxItem}" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
               <Setter Property="AutomationProperties.Name" Value="{Binding SourceName}"/>
             </Style>
           </ComboBox.ItemContainerStyle>

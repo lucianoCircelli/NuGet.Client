@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using Moq;
 using NuGet.CommandLine.XPlat;
+using NuGet.CommandLine.XPlat.ListPackage;
 using NuGet.CommandLine.XPlat.Utility;
 using NuGet.Common;
 using NuGet.Configuration;
@@ -134,9 +135,10 @@ namespace NuGet.CommandLine.Xplat.Tests
                 packages.TopLevelPackages = topLevelPackages;
                 packages.TransitivePackages = transitivePackages;
                 var allPackages = new List<FrameworkPackages> { packages };
-                var listPackageArgs = new ListPackageArgs(path: "", packageSources: Enumerable.Empty<PackageSource>(),
-                    frameworks: Enumerable.Empty<string>(),
+                var listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
                     ReportType.Outdated,
+                    new ListPackageConsoleRenderer(),
                     includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false,
                     logger: new Mock<ILogger>().Object,
                     CancellationToken.None);
@@ -208,9 +210,10 @@ namespace NuGet.CommandLine.Xplat.Tests
                 packages.TopLevelPackages = topLevelPackages;
                 packages.TransitivePackages = transitivePackages;
                 var allPackages = new List<FrameworkPackages> { packages };
-                var listPackageArgs = new ListPackageArgs(path: "", packageSources: Enumerable.Empty<PackageSource>(),
-                    frameworks: Enumerable.Empty<string>(),
+                var listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
                     ReportType.Deprecated,
+                    new ListPackageConsoleRenderer(),
                     includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false, logger: new Mock<ILogger>().Object,
                     CancellationToken.None);
 
@@ -281,9 +284,10 @@ namespace NuGet.CommandLine.Xplat.Tests
                 packages.TopLevelPackages = topLevelPackages;
                 packages.TransitivePackages = transitivePackages;
                 var allPackages = new List<FrameworkPackages> { packages };
-                var listPackageArgs = new ListPackageArgs(path: "", packageSources: Enumerable.Empty<PackageSource>(),
-                    frameworks: Enumerable.Empty<string>(),
+                var listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
                     ReportType.Vulnerable,
+                    new ListPackageConsoleRenderer(),
                     includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false, logger: new Mock<ILogger>().Object,
                     CancellationToken.None);
 

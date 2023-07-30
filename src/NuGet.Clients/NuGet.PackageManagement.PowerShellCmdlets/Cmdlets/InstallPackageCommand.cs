@@ -81,7 +81,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                     WaitAndLogPackageActions();
                     UnsubscribeFromProgressEvents();
 
-                    return Task.FromResult(true);
+                    return TaskResult.True;
                 }, Token);
             });
 
@@ -186,7 +186,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                 Log(MessageLevel.Debug, ExceptionUtilities.DisplayMessage(ex));
 
                 // Wrap FatalProtocolException coming from the server with a user friendly message
-                var error = string.Format(CultureInfo.CurrentUICulture, Resources.Exception_PackageNotFound, Id, Source);
+                var error = string.Format(CultureInfo.CurrentCulture, Resources.Exception_PackageNotFound, Id, Source);
                 Log(MessageLevel.Error, error);
             }
             catch (SignatureException ex)
@@ -235,7 +235,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                     if (UriHelper.IsHttpSource(Id))
                     {
                         _isHttp = true;
-                        Source = Path.GetTempPath();
+                        Source = NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp);
                     }
                     else
                     {

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -33,62 +34,79 @@ namespace NuGet.Build.Tasks.Console
         /// <returns><code>0</code> if the application ran successfully with no errors, otherwise <code>1</code>.</returns>
         public static async Task<int> Main(string[] args)
         {
-            var debug = IsDebug();
-
-            if (debug)
+            try
             {
-                Debugger.Launch();
-            }
+                var debug = IsDebug();
 
-            // Parse command-line arguments
-            if (!TryParseArguments(args, out (Dictionary<string, string> Options, FileInfo MSBuildExeFilePath, string EntryProjectFilePath, Dictionary<string, string> MSBuildGlobalProperties) arguments))
-            {
-                return 1;
-            }
+                if (debug)
+                {
+                    Debugger.Launch();
+                }
 
-            // Enable MSBuild feature flags
-            MSBuildFeatureFlags.MSBuildExeFilePath = arguments.MSBuildExeFilePath.FullName;
-            MSBuildFeatureFlags.EnableCacheFileEnumerations = true;
-            MSBuildFeatureFlags.LoadAllFilesAsReadonly = true;
-            MSBuildFeatureFlags.SkipEagerWildcardEvaluations = true;
+                NuGet.Common.Migrations.MigrationRunner.Run();
+
+                // Parse command-line arguments
+                if (!TryParseArguments(args, out (Dictionary<string, string> Options, FileInfo MSBuildExeFilePath, string EntryProjectFilePath, Dictionary<string, string> MSBuildGlobalProperties) arguments))
+                {
+                    return 1;
+                }
+
+                // Enable MSBuild feature flags
+                MSBuildFeatureFlags.MSBuildExeFilePath = arguments.MSBuildExeFilePath.FullName;
+                MSBuildFeatureFlags.EnableCacheFileEnumerations = true;
+                MSBuildFeatureFlags.LoadAllFilesAsReadonly = true;
+                MSBuildFeatureFlags.SkipEagerWildcardEvaluations = true;
 #if NETFRAMEWORK
-            if (AppDomain.CurrentDomain.IsDefaultAppDomain())
-            {
-                // MSBuild.exe.config has binding redirects that change from time to time and its very hard to make sure that NuGet.Build.Tasks.Console.exe.config is correct.
-                // It also can be different per instance of Visual Studio so when running unit tests it always needs to match that instance of MSBuild
-                // The code below runs this EXE in an AppDomain as if its MSBuild.exe so the assembly search location is next to MSBuild.exe and all binding redirects are used
-                // allowing this process to evaluate MSBuild projects as if it is MSBuild.exe
-                var thisAssembly = Assembly.GetExecutingAssembly();
+                if (AppDomain.CurrentDomain.IsDefaultAppDomain())
+                {
+                    // MSBuild.exe.config has binding redirects that change from time to time and its very hard to make sure that NuGet.Build.Tasks.Console.exe.config is correct.
+                    // It also can be different per instance of Visual Studio so when running unit tests it always needs to match that instance of MSBuild
+                    // The code below runs this EXE in an AppDomain as if its MSBuild.exe so the assembly search location is next to MSBuild.exe and all binding redirects are used
+                    // allowing this process to evaluate MSBuild projects as if it is MSBuild.exe
+                    Assembly thisAssembly = typeof(Program).Assembly;
 
-                AppDomain appDomain = AppDomain.CreateDomain(
-                    thisAssembly.FullName,
-                    securityInfo: null,
-                    info: new AppDomainSetup
-                    {
-                        ApplicationBase = arguments.MSBuildExeFilePath.DirectoryName,
-                        ConfigurationFile = Path.Combine(arguments.MSBuildExeFilePath.DirectoryName, "MSBuild.exe.config")
-                    });
+                    AppDomain appDomain = AppDomain.CreateDomain(
+                        thisAssembly.FullName,
+                        securityInfo: null,
+                        info: new AppDomainSetup
+                        {
+                            ApplicationBase = arguments.MSBuildExeFilePath.DirectoryName,
+                            ConfigurationFile = Path.Combine(arguments.MSBuildExeFilePath.DirectoryName, "MSBuild.exe.config")
+                        });
 
-                return appDomain
-                    .ExecuteAssembly(
-                        thisAssembly.Location,
-                        args);
-            }
+                    return appDomain
+                        .ExecuteAssembly(
+                            thisAssembly.Location,
+                            args);
+                }
 #endif
 
-            // Check whether the ask is to generate the restore graph file.
-            if (MSBuildStaticGraphRestore.IsOptionTrue("GenerateRestoreGraphFile", arguments.Options))
-            {
+                // Check whether the ask is to generate the restore graph file.
+                if (MSBuildStaticGraphRestore.IsOptionTrue("GenerateRestoreGraphFile", arguments.Options))
+                {
+                    using (var dependencyGraphSpecGenerator = new MSBuildStaticGraphRestore(debug: debug))
+                    {
+                        return dependencyGraphSpecGenerator.WriteDependencyGraphSpec(arguments.EntryProjectFilePath, arguments.MSBuildGlobalProperties, arguments.Options) ? 0 : 1;
+                    }
+                }
+
+                // Otherwise run restore!
                 using (var dependencyGraphSpecGenerator = new MSBuildStaticGraphRestore(debug: debug))
                 {
-                    return dependencyGraphSpecGenerator.WriteDependencyGraphSpec(arguments.EntryProjectFilePath, arguments.MSBuildGlobalProperties, arguments.Options) ? 0 : 1;
+                    return await dependencyGraphSpecGenerator.RestoreAsync(arguments.EntryProjectFilePath, arguments.MSBuildGlobalProperties, arguments.Options) ? 0 : 1;
                 }
             }
-
-            // Otherwise run restore!
-            using (var dependencyGraphSpecGenerator = new MSBuildStaticGraphRestore(debug: debug))
+            catch (Exception e)
             {
-                return await dependencyGraphSpecGenerator.RestoreAsync(arguments.EntryProjectFilePath, arguments.MSBuildGlobalProperties, arguments.Options) ? 0 : 1;
+                var consoleOutLogMessage = new ConsoleOutLogMessage
+                {
+                    Message = string.Format(CultureInfo.CurrentCulture, Strings.Error_StaticGraphUnhandledException, e.ToString()),
+                    MessageType = ConsoleOutLogMessageType.Error,
+                };
+
+                System.Console.Out.WriteLine(consoleOutLogMessage.ToJson());
+
+                return -1;
             }
         }
 

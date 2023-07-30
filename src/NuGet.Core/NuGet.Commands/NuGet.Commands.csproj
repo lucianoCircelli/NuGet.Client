@@ -1,12 +1,9 @@
-<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Complete commands common to command-line and GUI NuGet clients.</Description>
     <TargetFrameworks>$(TargetFrameworksLibraryForSigning)</TargetFrameworks>
     <TargetFramework />
-    <NoWarn>$(NoWarn);CS1591;CS1574;CS1573;CS1584;CS1658</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;CS1574;CS1573;CS1584;CS1658;RS0041</NoWarn>
     <NoWarn Condition=" $(TargetFramework.StartsWith('netstandard')) OR $(TargetFramework.StartsWith('netcoreapp')) ">$(NoWarn);CS1998</NoWarn>
     <PackProject>true</PackProject>
     <IncludeInVSIX>true</IncludeInVSIX>
@@ -22,13 +19,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="..\..\..\submodules\FileSystem\src\**\AssemblyInfo.cs" />
-    <Compile Include="..\..\..\submodules\FileSystem\src\Microsoft.Extensions.FileSystemGlobbing\**\*.cs;..\..\..\submodules\FileSystem\src\Microsoft.AspNet.FileProviders.Abstractions\**\*.cs;..\..\..\submodules\FileSystem\src\Microsoft.AspNet.FileProviders.Sources\**\*.cs;..\..\..\submodules\Common\src\Microsoft.Extensions.Primitives\IChangeToken.cs" Exclude="..\..\..\submodules\FileSystem\src\**\AssemblyInfo.cs;bin\**;obj\**;**\*.xproj;packages\**" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(NuGetCoreSrcDirectory)NuGet.Credentials\NuGet.Credentials.csproj" />
-    <ProjectReference Include="$(NuGetCoreSrcDirectory)NuGet.ProjectModel\NuGet.ProjectModel.csproj" />
+    <ProjectReference Include="..\NuGet.Credentials\NuGet.Credentials.csproj" />
+    <ProjectReference Include="..\NuGet.ProjectModel\NuGet.ProjectModel.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' ">
@@ -68,7 +65,4 @@
   <ItemGroup>
     <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
   </ItemGroup>
-
-  <Import Project="$(BuildCommonDirectory)common.targets"/>
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

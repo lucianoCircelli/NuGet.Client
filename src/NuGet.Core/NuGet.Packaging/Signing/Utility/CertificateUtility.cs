@@ -100,7 +100,7 @@ namespace NuGet.Packaging.Signing
 
             if (certCollection.Count > ChainDepthLimit)
             {
-                collectionStringBuilder.AppendLine(string.Format(Strings.CertUtilityMultipleCertificatesFooter, certCollection.Count - ChainDepthLimit));
+                collectionStringBuilder.AppendLine(string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityMultipleCertificatesFooter, certCollection.Count - ChainDepthLimit));
             }
 
             return collectionStringBuilder.ToString();
@@ -122,7 +122,7 @@ namespace NuGet.Packaging.Signing
 
             if (chainElementsCount > ChainDepthLimit)
             {
-                collectionStringBuilder.AppendLine(string.Format(Strings.CertUtilityMultipleCertificatesFooter, chainElementsCount - ChainDepthLimit));
+                collectionStringBuilder.AppendLine(string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityMultipleCertificatesFooter, chainElementsCount - ChainDepthLimit));
             }
 
             return collectionStringBuilder.ToString();
@@ -155,11 +155,7 @@ namespace NuGet.Packaging.Signing
         public static bool IsCertificatePublicKeyValid(X509Certificate2 certificate)
         {
             // Check if the public key is RSA with a valid keysize
-#if NET45
-            System.Security.Cryptography.RSA RSAPublicKey = certificate.PublicKey.Key as System.Security.Cryptography.RSA;
-#else
             System.Security.Cryptography.RSA RSAPublicKey = RSACertificateExtensions.GetRSAPublicKey(certificate);
-#endif
 
             if (RSAPublicKey != null)
             {
@@ -189,7 +185,7 @@ namespace NuGet.Packaging.Signing
         {
             foreach (var extension in certificate.Extensions)
             {
-                if (string.Equals(extension.Oid.Value, Oids.EnhancedKeyUsage))
+                if (string.Equals(extension.Oid.Value, Oids.EnhancedKeyUsage, StringComparison.Ordinal))
                 {
                     var ekuExtension = (X509EnhancedKeyUsageExtension)extension;
 
@@ -222,7 +218,7 @@ namespace NuGet.Packaging.Signing
         {
             foreach (var extension in certificate.Extensions)
             {
-                if (string.Equals(extension.Oid.Value, Oids.EnhancedKeyUsage))
+                if (string.Equals(extension.Oid.Value, Oids.EnhancedKeyUsage, StringComparison.Ordinal))
                 {
                     var ekuExtension = (X509EnhancedKeyUsageExtension)extension;
 
@@ -315,9 +311,9 @@ namespace NuGet.Packaging.Signing
                 throw new ArgumentNullException(nameof(certificate));
             }
 
-            using (var chainHolder = new X509ChainHolder())
+            using (X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning())
             {
-                X509Chain chain = chainHolder.Chain;
+                IX509Chain chain = chainHolder.Chain2;
 
                 chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                 chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority |

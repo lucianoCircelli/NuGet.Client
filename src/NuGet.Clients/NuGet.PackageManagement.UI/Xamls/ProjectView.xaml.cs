@@ -3,13 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
-using Microsoft.TeamFoundation.Common;
 using NuGet.Versioning;
 
 namespace NuGet.PackageManagement.UI
@@ -116,7 +114,6 @@ namespace NuGet.PackageManagement.UI
                             {
                                 _versions.SelectedIndex++;
                             }
-                            PackageDetailControlModel.PreviousSelectedVersion = _versions.Text;
 
                             e.Handled = true;
                         }
@@ -133,7 +130,6 @@ namespace NuGet.PackageManagement.UI
                             {
                                 _versions.SelectedIndex--;
                             }
-                            PackageDetailControlModel.PreviousSelectedVersion = _versions.Text;
 
                             e.Handled = true;
                         }
@@ -152,8 +148,7 @@ namespace NuGet.PackageManagement.UI
         {
             if (PackageDetailControlModel.IsProjectPackageReference)
             {
-                string comboboxText = _versions.Text.Replace(" ", "");
-                bool userTypedAVersionRange = comboboxText.StartsWith("(", StringComparison.OrdinalIgnoreCase) || comboboxText.StartsWith("[", StringComparison.OrdinalIgnoreCase);
+                string comboboxText = _versions.Text;
                 IEnumerable<NuGetVersion> versions = DetailModel.Versions.Where(v => v != null).Select(v => v.Version);
 
                 switch (e.Key)
@@ -170,11 +165,22 @@ namespace NuGet.PackageManagement.UI
                             {
                                 // Search for the best version
                                 NuGetVersion rangeBestVersion = userRequestedVersionRange.FindBestMatch(versions);
-                                bool isBestOption = rangeBestVersion.ToString() == _versions.Items[_versions.SelectedIndex].ToString();
+                                DisplayVersion selectedVersion = (DisplayVersion)_versions.Items.CurrentItem;
+                                bool isBestOption = rangeBestVersion.ToString() == selectedVersion.Version.ToString();
                                 if (isBestOption)
                                 {
-                                    PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRequestedVersionRange, rangeBestVersion, additionalInfo: null);
-                                    _versions.Text = comboboxText;
+                                    // Add vulnerable/deprecated labels to non floating/range versions
+                                    if (userRequestedVersionRange.OriginalString.StartsWith("(", StringComparison.OrdinalIgnoreCase) ||
+                                        userRequestedVersionRange.OriginalString.StartsWith("[", StringComparison.OrdinalIgnoreCase) ||
+                                        userRequestedVersionRange.IsFloating)
+                                    {
+                                        PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRequestedVersionRange, rangeBestVersion, additionalInfo: null);
+                                    }
+                                    else
+                                    {
+                                        PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRequestedVersionRange, rangeBestVersion, additionalInfo: null, isVulnerable: selectedVersion.IsVulnerable, isDeprecated: selectedVersion.IsDeprecated);
+                                    }
+                                    _versions.Text = PackageDetailControlModel.SelectedVersion.ToString();
                                 }
                                 else
                                 {
@@ -208,7 +214,7 @@ namespace NuGet.PackageManagement.UI
                             var selectionStart = TextBox.SelectionStart;
 
                             PackageDetailControlModel.UserInput = comboboxText; // Update the variable so the filter refreshes
-                            SetComboboxCurrentVersion(comboboxText, userTypedAVersionRange, versions);
+                            SetComboboxCurrentVersion(comboboxText, versions);
 
                             _versions.Text = comboboxText;
                             TextBox.SelectionStart = selectionStart;
@@ -226,7 +232,7 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        private void SetComboboxCurrentVersion(string comboboxText, bool userTypedAVersionRange, IEnumerable<NuGetVersion> versions)
+        private void SetComboboxCurrentVersion(string comboboxText, IEnumerable<NuGetVersion> versions)
         {
             NuGetVersion matchVersion = null;
             VersionRange userRange = null;
@@ -238,21 +244,26 @@ namespace NuGet.PackageManagement.UI
                 matchVersion = userRange.FindBestMatch(versions);
             }
 
+            if (matchVersion == null && userRange == null)
+            {
+                return;
+            }
+
             // If the selected version is not the correct one, deselect a version so Install/Update button is disabled.
             if (_versions.SelectedIndex != -1 && matchVersion?.ToString() != _versions.Items[_versions.SelectedIndex].ToString())
             {
                 _versions.SelectedIndex = -1;
-                PackageDetailControlModel.SelectedVersion = null;
             }
 
             // Automatically select the item when the input or custom range text matches it
             for (int i = 0; i < _versions.Items.Count; i++)
             {
-                var currentItem = _versions.Items[i];
-                if (currentItem != null && (comboboxText == _versions.Items[i].ToString() || _versions.Items[i].ToString() == matchVersion?.ToString()))
+                DisplayVersion currentItem = _versions.Items[i] as DisplayVersion;
+                if (currentItem != null && // null, this represent a bar in UI in the Versions combobox 
+                    (comboboxText.Trim() == currentItem.Version.ToNormalizedString() || matchVersion?.ToString() == currentItem.Version.ToNormalizedString())) // trim extra spaces and compare versions without labels
                 {
-                    _versions.SelectedIndex = i;
-                    PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRange, matchVersion, additionalInfo: null);
+                    _versions.SelectedIndex = i; // This is the "select" effect in the dropdown
+                    PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRange, matchVersion, additionalInfo: null, isDeprecated: currentItem.IsDeprecated, isVulnerable: currentItem.IsVulnerable);
                 }
             }
         }
@@ -271,6 +282,13 @@ namespace NuGet.PackageManagement.UI
             {
                 InstallButtonClicked(this, EventArgs.Empty);
             }
+        }
+
+        private void Versions_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            PackageDetailControlModel.PreviousSelectedVersion = e.AddedItems.Count > 0 && e.AddedItems[0] != null ? e.AddedItems[0].ToString() : string.Empty;
+
+            return;
         }
     }
 }

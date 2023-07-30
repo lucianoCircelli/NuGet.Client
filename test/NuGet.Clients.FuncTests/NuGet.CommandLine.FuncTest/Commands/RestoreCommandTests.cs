@@ -67,7 +67,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 Assert.True(File.Exists(projectA.NuGetLockFileOutputPath));
 
                 var lockFile = PackagesLockFileFormat.Read(projectA.NuGetLockFileOutputPath);
-                Assert.Equal(4, lockFile.Targets.Count);
+                // There will be a "ridless" target, then one target per whichever RIDs the project system enables by default
+                lockFile.Targets.All(t => t.Name.StartsWith(".NETFramework,Version=v4.6.1")).Should().BeTrue();
 
                 var targets = lockFile.Targets.Where(t => t.Dependencies.Count > 0).ToList();
                 Assert.Equal(1, targets.Count);
@@ -140,7 +141,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 Assert.Equal(packagesLockFilePath, projectA.NuGetLockFileOutputPath);
 
                 var lockFile = PackagesLockFileFormat.Read(projectA.NuGetLockFileOutputPath);
-                Assert.Equal(4, lockFile.Targets.Count);
+                // There will be a "ridless" target, then one target per whichever RIDs the project system enables by default
+                lockFile.Targets.All(t => t.Name.StartsWith(".NETFramework,Version=v4.6.1")).Should().BeTrue();
 
                 var targets = lockFile.Targets.Where(t => t.Dependencies.Count > 0).ToList();
                 Assert.Equal(1, targets.Count);
@@ -973,7 +975,6 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 nugetExe,
                 pathContext.WorkingDirectory.Path,
                 string.Join(" ", args),
-                waitForExit: true,
                 environmentVariables: envVars);
 
             // Assert
@@ -1171,6 +1172,44 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 // Assert
                 Assert.Contains("Unable to find version '1.0.0' of package 'Contoso.A'", result.Errors);
             }
+        }
+
+
+        [Fact]
+        public async Task Restore_WithHttpSource_Warns()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            // Set up solution, project, and packages
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageA);
+            pathContext.Settings.AddSource("http-feed", "http://api.source/index.json");
+            pathContext.Settings.AddSource("https-feed", "https://api.source/index.json");
+
+            var net461 = NuGetFramework.Parse("net461");
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectA.Frameworks.Add(new SimpleTestProjectFrameworkContext(net461));
+            var projectAPackages = Path.Combine(pathContext.SolutionRoot, "packages");
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""A"" version=""1.0.0"" targetFramework=""net461"" />
+</packages>");
+
+            solution.Projects.Add(projectA);
+            solution.Create(pathContext.SolutionRoot);
+
+            // Act
+            var result = RunRestore(pathContext, _successExitCode);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            Assert.Contains($"Added package 'A.1.0.0' to folder '{projectAPackages}'", result.Output);
+            Assert.Contains("You are running the 'restore' operation with an 'http' source, 'http://api.source/index.json'. Support for 'http' sources will be removed in a future version.", result.Output);
         }
 
         public static string GetResource(string name)

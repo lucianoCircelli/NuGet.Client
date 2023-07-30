@@ -8,12 +8,8 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.CommandLineUtils;
-using NuGet.Common;
 using NuGet.Commands;
-
-#if DEBUG
-using Microsoft.Build.Locator;
-#endif
+using NuGet.Common;
 
 namespace NuGet.CommandLine.XPlat
 {
@@ -37,18 +33,19 @@ namespace NuGet.CommandLine.XPlat
         public static int MainInternal(string[] args, CommandOutputLogger log)
         {
 #if DEBUG
-            try
+            // Uncomment the following when debugging. Also uncomment the PackageReference for Microsoft.Build.Locator.
+            /*try
             {
                 // .NET JIT compiles one method at a time. If this method calls `MSBuildLocator` directly, the
                 // try block is never entered if Microsoft.Build.Locator.dll can't be found. So, run it in a
                 // lambda function to ensure we're in the try block. C# IIFE!
-                ((Action)(() => MSBuildLocator.RegisterDefaults()))();
+                ((Action)(() => Microsoft.Build.Locator.MSBuildLocator.RegisterDefaults()))();
             }
             catch
             {
                 // MSBuildLocator is used only to enable Visual Studio debugging.
                 // It's not needed when using a patched dotnet sdk, so it doesn't matter if it fails.
-            }
+            }*/
 
             var debugNuGetXPlat = Environment.GetEnvironmentVariable("DEBUG_NUGET_XPLAT");
 
@@ -64,6 +61,13 @@ namespace NuGet.CommandLine.XPlat
             {
                 CultureUtility.DisableLocalization();
             }
+            else
+            {
+                UILanguageOverride.Setup(log);
+            }
+            log.LogDebug(string.Format(CultureInfo.CurrentCulture, Strings.Debug_CurrentUICulture, CultureInfo.DefaultThreadCurrentUICulture));
+
+            NuGet.Common.Migrations.MigrationRunner.Run();
 
             var app = InitializeApp(args, log);
 

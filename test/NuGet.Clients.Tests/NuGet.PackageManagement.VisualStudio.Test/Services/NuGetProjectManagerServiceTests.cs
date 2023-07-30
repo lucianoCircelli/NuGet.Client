@@ -34,10 +34,10 @@ using NuGet.Resolver;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using NuGet.VisualStudio.Internal.Contracts;
 using StreamJsonRpc;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
 using Xunit.Abstractions;
 using static NuGet.PackageManagement.VisualStudio.Test.ProjectFactories;
@@ -58,6 +58,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         private TestDirectory _testDirectory;
         private readonly IVsProjectThreadingService _threadingService;
         private readonly TestLogger _logger;
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
 
         public NuGetProjectManagerServiceTests(GlobalServiceProvider globalServiceProvider, ITestOutputHelper output)
             : base(globalServiceProvider)
@@ -75,9 +77,13 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             {
                 { constant.FlightFlag, true },
             };
-            var service = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(flightsEnabled));
 
-            service.IsExperimentEnabled(constant).Should().Be(true);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
+            var service = new NuGetExperimentationService(Mock.Of<IEnvironmentVariableReader>(), NuGetExperimentationServiceUtility.GetMock(flightsEnabled), _outputConsoleProvider);
+
+            service.IsExperimentEnabled(ExperimentationConstants.TransitiveDependenciesInPMUI).Should().Be(true);
             componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(service);
 
             _logger = new TestLogger(output);
@@ -614,7 +620,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.True(result.Success);
 
             // Act
-            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, CancellationToken.None);
+            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             // Assert
             installedAndTransitive.InstalledPackages.Should().HaveCount(1);
@@ -667,7 +673,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act I: We will not have transitive packages data
 
-            var installedProject1 = await prProject.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+            var installedProject1 = await prProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
             Assert.NotEmpty(installedProject1.InstalledPackages);
             Assert.Empty(installedProject1.TransitivePackages);
 
@@ -688,7 +694,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act II: From this point, we will have transitive packages
 
-            var installedProject2 = await prProject.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+            var installedProject2 = await prProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
             Assert.NotEmpty(installedProject2.InstalledPackages);
             Assert.NotEmpty(installedProject2.TransitivePackages);
 
@@ -765,7 +771,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             RestoreResult result = await command.ExecuteAsync();
             await result.CommitAsync(logger, CancellationToken.None);
             Assert.True(result.Success);
-            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, CancellationToken.None);
+            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             // Verify transitive package B
             var transitivePackageB = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageB").First();
@@ -793,7 +799,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_WithCpsPackageReferenceProject_OneTransitiveReferenceAsync()
+        private async Task GetInstalledAndTransitivePackagesAsync_WithCpsPackageReferenceProject_OneTransitiveReferenceAndEmitsCounterfactualTelemetryAsync()
         {
             // packageA_2.0.0 -> packageB_1.0.0
 
@@ -865,8 +871,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.True(result.Success);
             Assert.True(File.Exists(pajFilepath));
 
+            // Reset sending counterfactual telemetry, for testing purposes
+            CounterfactualLoggers.TransitiveDependencies.Reset();
+
             // Act
-            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, CancellationToken.None);
+            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             var packagesB = installedAndTransitive
                 .TransitivePackages
@@ -877,6 +886,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(1, packagesB.Count());
             Assert.Collection(packagesB,
                 pkg => AssertElement(pkg, "packageA", "2.0.0"));
+            Assert.Contains(telemetryEvents, te => te.Name == CounterfactualLoggers.TransitiveDependencies.EventName);
         }
 
         [Fact]
@@ -971,6 +981,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             // Act
             var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(
                 new[] { projectId },
+                includeTransitiveOrigins: true,
                 CancellationToken.None);
 
             Assert.Equal(2, installedAndTransitive.InstalledPackages.Count);
@@ -1014,13 +1025,21 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         [InlineData(false)]
         private async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultitargeting_SucceedsAsync(bool useSameVersions)
         {
+            // useSameVersion = true
             // net5.0:
-            // packageX_3.0.0 -> packageD_(0.1.1 or 0.1.2)
+            // packageX_3.0.0 -> packageD_0.1.1
             // packageA_2.0.0 -> packageB_1.0.0 -> packageC_0.0.1
             //                                  -> packageD_0.1.1
-            //
             // net472:
-            // packageX(3.0.0 or 4.0.0) -> packageD(0.1.1 or 0.1.2)
+            // packageX_3.0.0 -> packageD_0.1.1
+
+            // useSameVersion = false
+            // net5.0:
+            // packageX_3.0.0 -> packageD_0.1.2
+            // packageA_2.0.0 -> packageB_1.0.0 -> packageC_0.0.1
+            //                                  -> packageD_0.1.1
+            // net472:
+            // packageX_4.0.0 -> packageD_0.1.2
 
             string projectName = Guid.NewGuid().ToString();
             string projectId = projectName;
@@ -1115,7 +1134,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.True(result.Success);
             Assert.True(File.Exists(pajFilepath));
 
-            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, CancellationToken.None);
+            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             // Act I
             var topPackagesB = installedAndTransitive
@@ -1146,8 +1165,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             else
             {
                 Assert.Collection(topPackagesD,
-                    x => AssertElement(x, "packageA", "2.0.0"),
-                    x => AssertElement(x, "packageX", "4.0.0")); // multitargeting brings this version
+                    x => AssertElement(x, "packageA", "2.0.0", "net5.0"),
+                    x => AssertElement(x, "packageX", "3.0.0", "net5.0")); // multitargeting brings this version
             }
         }
 
@@ -1301,7 +1320,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.True(File.Exists(pajFilepath));
 
             // Act
-            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, CancellationToken.None);
+            var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             // Act I
             var topPackagesB = installedAndTransitive
@@ -1342,7 +1361,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             await Assert.ThrowsAsync<ArgumentException>(async () =>
             {
-                await _projectManager.GetPackageFoldersAsync(new[] { "unknownProject" } , CancellationToken.None);
+                await _projectManager.GetPackageFoldersAsync(new[] { "unknownProject" }, CancellationToken.None);
             });
         }
 
@@ -1409,7 +1428,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.True(File.Exists(pajFilepath));
 
             // Act
-            IReadOnlyCollection<string> folders = await _projectManager.GetPackageFoldersAsync(new[] {projectId}, CancellationToken.None);
+            IReadOnlyCollection<string> folders = await _projectManager.GetPackageFoldersAsync(new[] { projectId }, CancellationToken.None);
 
             // Assert
             Assert.Equal(1, folders.Count); // only globalPackagesFolder is listed
@@ -1446,7 +1465,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json")
             };
 
-            await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, "packageA", "1.0.0", new PackageDependency[]{});
+            await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, "packageA", "1.0.0", new PackageDependency[] { });
 
             var command = new RestoreCommand(request);
             RestoreResult result = await command.ExecuteAsync();
@@ -1505,6 +1524,54 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Assert
             Assert.Equal(2, folders.Count);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        private async Task GetCentralPackageVersionsManagmentEnabled_SucceedsAsync(bool isCentralPackageVersionsEnabled)
+        {
+            string projectName = Guid.NewGuid().ToString();
+            string projectId = projectName;
+            var projectSystemCache = new ProjectSystemCache();
+            IVsProjectAdapter projectAdapter = Mock.Of<IVsProjectAdapter>();
+
+            using var pathContext = new SimpleTestPathContext();
+            Initialize();
+
+            // Prepare: Create project
+            string projectFullPath = Path.Combine(pathContext.SolutionRoot, projectName, $"{projectName}.csproj");
+
+            CpsPackageReferenceProject prProject = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectSystemCache);
+
+            ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
+            string referenceSpec = $@"
+                {{
+                    ""frameworks"":
+                    {{
+                        ""net6.0"":
+                        {{
+                            ""dependencies"":
+                            {{
+                            }}
+                        }}
+                    }}
+                }}";
+            PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
+            packageSpec.RestoreMetadata.CentralPackageVersionsEnabled = isCentralPackageVersionsEnabled;
+
+            // Restore info
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
+            projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
+
+            _solutionManager.NuGetProjects.Add(prProject);
+
+            // Act
+            bool isCentralPackageManagmentEnabled = await _projectManager.IsCentralPackageManagementEnabledAsync(projectId, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(isCentralPackageVersionsEnabled, isCentralPackageManagmentEnabled);
         }
 
         [Fact]
@@ -1568,10 +1635,14 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(2, folders.Count);
         }
 
-        private void AssertElement(IPackageReferenceContextInfo pkg, string id, string version)
+        private void AssertElement(IPackageReferenceContextInfo pkg, string id, string version, string framework = null)
         {
             Assert.Equal(id, pkg.Identity.Id);
             Assert.Equal(NuGetVersion.Parse(version), pkg.Identity.Version);
+            if (!string.IsNullOrEmpty(framework))
+            {
+                Assert.Equal(NuGetFramework.Parse(framework), pkg.Framework);
+            }
         }
 
         private static void AddPackageDependency(ProjectSystemCache projectSystemCache, ProjectNames projectNames, PackageSpec packageSpec, SimpleTestPackageContext package)
@@ -1665,6 +1736,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             // packageA_2.0.0 -> packageB_1.0.0 -> packageC_0.0.1
             //                                  -> packageD_0.1.1
             // case useSameversions = false
+            // packageX_4.0.0 -> packageD_0.1.2
             // packageX_3.0.0 -> packageD_0.1.2
             // packageA_2.0.0 -> packageB_1.0.0 -> packageC_0.0.1
             //                                  -> packageD_0.1.1
@@ -1737,6 +1809,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             public Task InitializationTask { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
             public string SolutionDirectory => _directory.Path;
+
+            public CancellationToken VsShutdownToken => CancellationToken.None;
 
             public bool IsSolutionOpen => throw new NotImplementedException();
 

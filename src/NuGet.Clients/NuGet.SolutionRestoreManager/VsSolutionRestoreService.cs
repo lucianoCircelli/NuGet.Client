@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -224,7 +225,7 @@ namespace NuGet.SolutionRestoreManager
                 }
                 catch (Exception e)
                 {
-                    var restoreLogMessage = RestoreLogMessage.CreateError(NuGetLogCode.NU1105, string.Format(Resources.NU1105, projectNames.ShortName, e.Message));
+                    var restoreLogMessage = RestoreLogMessage.CreateError(NuGetLogCode.NU1105, string.Format(CultureInfo.CurrentCulture, Resources.NU1105, projectNames.ShortName, e.Message));
                     restoreLogMessage.ProjectPath = projectUniqueName;
 
                     nominationErrors = new List<IAssetsLogMessage>()
@@ -300,7 +301,7 @@ namespace NuGet.SolutionRestoreManager
 
             // Initialize OTF and CT values when original value of OTF property is not provided.
             var originalTargetFrameworks = tfis
-                .Select(tfi => tfi.FrameworkName.GetShortFolderName())
+                .Select(tfi => GetBestOriginalFrameworkValue(tfi))
                 .ToArray();
             var crossTargeting = originalTargetFrameworks.Length > 1;
 
@@ -349,12 +350,21 @@ namespace NuGet.SolutionRestoreManager
                     CentralPackageVersionsEnabled = cpvmEnabled,
                     CentralPackageVersionOverrideDisabled = VSNominationUtilities.IsCentralPackageVersionOverrideDisabled(TargetFrameworks),
                     CentralPackageTransitivePinningEnabled = VSNominationUtilities.IsCentralPackageTransitivePinningEnabled(TargetFrameworks),
+                    RestoreAuditProperties = VSNominationUtilities.GetRestoreAuditProperties(TargetFrameworks),
                 },
                 RuntimeGraph = VSNominationUtilities.GetRuntimeGraph(TargetFrameworks),
                 RestoreSettings = new ProjectRestoreSettings() { HideWarningsAndErrors = true }
             };
 
             return packageSpec;
+        }
+
+        // Prefer TargetAlias if set. If not, use the framewor short name.
+        private static string GetBestOriginalFrameworkValue(TargetFrameworkInformation tfi)
+        {
+            // Validate the framework
+            string shortFolderName = tfi.FrameworkName.GetShortFolderName();
+            return !string.IsNullOrEmpty(tfi.TargetAlias) ? tfi.TargetAlias : shortFolderName;
         }
 
         private static string GetProjectOutputPath(string projectDirectory, string msbuildProjectExtensionsPath)

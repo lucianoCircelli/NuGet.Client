@@ -65,7 +65,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            IComponentModel componentModel = await ServiceLocator.GetGlobalServiceFreeThreadedAsync<SComponentModel, IComponentModel>();
+            IComponentModel componentModel = await ServiceLocator.GetComponentModelAsync();
 
             Assumes.NotNull(componentModel);
 
@@ -92,7 +92,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         private static string CreateProjectActionId()
         {
-            return Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+            return Guid.NewGuid().ToString("N", provider: null);
         }
 
         private void RegisterEventHandlers()

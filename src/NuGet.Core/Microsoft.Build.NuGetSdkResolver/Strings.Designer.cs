@@ -70,6 +70,33 @@ namespace Microsoft.Build.NuGetSdkResolver {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The NuGetSdkResolver did not resolve this SDK because it was disabled by the MSBUILDDISABLENUGETSDKRESOLVER environment variable..
+        /// </summary>
+        internal static string Error_DisabledSdkResolver {
+            get {
+                return ResourceManager.GetString("Error_DisabledSdkResolver", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to load NuGet settings. {0}.
+        /// </summary>
+        internal static string Error_FailedToReadSettings {
+            get {
+                return ResourceManager.GetString("Error_FailedToReadSettings", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The NuGetSdkResolver did not resolve this SDK because there was no version specified in the project or global.json..
+        /// </summary>
+        internal static string Error_NoSdkVersion {
+            get {
+                return ResourceManager.GetString("Error_NoSdkVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Failed to determine path to global.json from path &quot;{0}&quot;. {1}.
         /// </summary>
         internal static string FailedToFindPathToGlobalJson {

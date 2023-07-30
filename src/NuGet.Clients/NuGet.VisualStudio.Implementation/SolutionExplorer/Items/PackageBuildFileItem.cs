@@ -40,7 +40,7 @@ namespace NuGet.VisualStudio.SolutionExplorer
             _fileOpener = fileOpener;
         }
 
-        public string? FullPath => Target.TryResolvePackagePath(Library.Name, Library.Version, out string? fullPath)
+        public string? FullPath => Library.Version is not null && Target.TryResolvePackagePath(Library.Name, Library.Version, out string? fullPath)
             ? System.IO.Path.GetFullPath(System.IO.Path.Combine(fullPath, Path))
             : null;
 
@@ -71,11 +71,10 @@ namespace NuGet.VisualStudio.SolutionExplorer
                     result = true;
                 }
             }
-
             return result;
         }
 
-        private sealed class BrowseObject : BrowseObjectBase
+        private sealed class BrowseObject : LocalizableProperties
         {
             private readonly PackageBuildFileItem _item;
 

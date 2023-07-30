@@ -27,6 +27,9 @@ namespace NuGet.Tests.Apex
 {
     public class CommonUtility
     {
+        private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
+
         public static async Task CreatePackageInSourceAsync(string packageSource, string packageName, string packageVersion)
         {
             var package = CreatePackage(packageName, packageVersion);
@@ -59,7 +62,7 @@ namespace NuGet.Tests.Apex
             string packageVersion,
             X509Certificate2 testCertificate,
             Uri v3ServiceIndexUrl,
-            IReadOnlyList<string>packageOwners = null,
+            IReadOnlyList<string> packageOwners = null,
             Uri timestampProviderUrl = null)
         {
             var package = CreatePackage(packageName, packageVersion);
@@ -94,7 +97,8 @@ namespace NuGet.Tests.Apex
             package.IsPrimarySigned = true;
             package.PrimarySignatureCertificate = authorCertificate;
 
-            if (package.PrimaryTimestampProvider == null && timestampProviderUrl != null) {
+            if (package.PrimaryTimestampProvider == null && timestampProviderUrl != null)
+            {
                 package.PrimaryTimestampProvider = new Rfc3161TimestampProvider(timestampProviderUrl);
             }
 
@@ -230,7 +234,7 @@ namespace NuGet.Tests.Apex
             testService.WaitForAutoRestore();
 
             var assetsFilePath = GetAssetsFilePath(project.FullPath);
-            
+
             // Project has an assets file, let's look there to assert
             var inAssetsFile = IsPackageInstalledInAssetsFile(assetsFilePath, packageName, packageVersion, true);
 
@@ -271,7 +275,7 @@ namespace NuGet.Tests.Apex
             testService.WaitForAutoRestore();
 
             var assetsFilePath = GetAssetsFilePath(project.FullPath);
-            
+
             // Project has an assets file, let's look there to assert
             var inAssetsFile = IsPackageInstalledInAssetsFile(assetsFilePath, packageName, packageVersion, false);
             logger.LogInformation($"Exists: {inAssetsFile}");
@@ -312,38 +316,6 @@ namespace NuGet.Tests.Apex
             }
         }
 
-        public static string CreateSolutionDirectory(string root)
-        {
-            string parentPath;
-
-            // Loop until we find a directory that isn't taken (extremely unlikely this would need multiple guids).
-            while (true)
-            {
-                var guid = Guid.NewGuid().ToString();
-
-                // Use a shorter path to this easier when debugging
-                parentPath = Path.Combine(root, guid.Split('-')[0]);
-
-                if (Directory.Exists(parentPath))
-                {
-                    // If a collision happens use the full guid
-                    parentPath = Path.Combine(root, guid);
-
-                    if (!Directory.Exists(parentPath))
-                    {
-                        break;
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            Directory.CreateDirectory(parentPath);
-            return parentPath;
-        }
-
         internal static void OpenNuGetPackageManagerWithDte(VisualStudioHost visualStudio, ILogger logger)
         {
             visualStudio.ObjectModel.Solution.WaitForOperationsInProgress(TimeSpan.FromMinutes(3));
@@ -382,7 +354,7 @@ namespace NuGet.Tests.Apex
         {
             var numAttempts = 0;
             LockFileLibrary lockFileLibrary = null;
-            while(numAttempts++ < 3)
+            while (numAttempts++ < 3)
             {
                 var version = NuGetVersion.Parse(packageVersion);
                 var lockFile = GetAssetsFileWithRetry(pathToAssetsFile);
@@ -444,6 +416,30 @@ namespace NuGet.Tests.Apex
         {
             var projectDirectory = Path.GetDirectoryName(projectPath);
             return Path.Combine(projectDirectory, "obj", "project.assets.json");
+        }
+
+        public static FileInfo GetCacheFilePath(string projectPath)
+        {
+            var projectDirectory = Path.GetDirectoryName(projectPath);
+            return new FileInfo(Path.Combine(projectDirectory, "obj", "project.nuget.cache"));
+        }
+
+        public static void WaitForFileExists(FileInfo file)
+        {
+            Omni.Common.WaitFor.IsTrue(
+                () => File.Exists(file.FullName),
+                Timeout,
+                Interval,
+                $"{file.FullName} did not exist within {Timeout}.");
+        }
+
+        public static void WaitForFileNotExists(FileInfo file)
+        {
+            Omni.Common.WaitFor.IsTrue(
+                () => !File.Exists(file.FullName),
+                Timeout,
+                Interval,
+                $"{file.FullName} still existed after {Timeout}.");
         }
 
         public static void UIInvoke(Action action)

@@ -31,7 +31,7 @@ namespace NuGet.Configuration
         /// </summary>
         public virtual string Key => Attributes[ConfigurationConstants.KeyAttribute];
 
-        protected override IReadOnlyCollection<string> RequiredAttributes { get; } = IReadOnlyCollectionUtility.Create(ConfigurationConstants.KeyAttribute);
+        protected override IReadOnlyCollection<string> RequiredAttributes { get; } = new HashSet<string>(new[] { ConfigurationConstants.KeyAttribute });
 
         protected void SetKey(string value)
         {
@@ -158,8 +158,8 @@ namespace NuGet.Configuration
             base.Update(other);
 
             Dictionary<PackagePatternItem, PackagePatternItem> otherPatterns = packageSourceMappingSourceItem.Patterns.ToDictionary(c => c, c => c);
-            var immutablePatterns = new List<PackagePatternItem>(Patterns);
-            foreach (PackagePatternItem packagePatternItem in immutablePatterns)
+            var clonedPatterns = new List<PackagePatternItem>(Patterns);
+            foreach (PackagePatternItem packagePatternItem in clonedPatterns)
             {
                 if (otherPatterns.TryGetValue(packagePatternItem, out PackagePatternItem otherChild))
                 {
@@ -177,7 +177,7 @@ namespace NuGet.Configuration
                 }
             }
 
-            foreach (var newPackagePatternItem in otherPatterns)
+            foreach (KeyValuePair<PackagePatternItem, PackagePatternItem> newPackagePatternItem in otherPatterns)
             {
                 var itemToAdd = newPackagePatternItem.Value;
                 Patterns.Add(itemToAdd);

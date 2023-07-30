@@ -104,7 +104,7 @@ namespace NuGet.Configuration
                         }
                         catch (Exception e)
                         {
-                            throw new NuGetConfigurationException(string.Format(Resources.FileCertItemPasswordCannotBeDecrypted, PackageSource), e);
+                            throw new NuGetConfigurationException(string.Format(CultureInfo.CurrentCulture, Resources.FileCertItemPasswordCannotBeDecrypted, PackageSource), e);
                         }
                     }
                 }
@@ -114,16 +114,20 @@ namespace NuGet.Configuration
         }
 
         protected override IReadOnlyCollection<string> AllowedAttributes { get; }
-            = IReadOnlyCollectionUtility.Create<string>(
+            = new HashSet<string>(new[]
+            {
                 ConfigurationConstants.PackageSourceAttribute,
                 ConfigurationConstants.PathAttribute,
                 ConfigurationConstants.PasswordAttribute,
-                ConfigurationConstants.ClearTextPasswordAttribute);
+                ConfigurationConstants.ClearTextPasswordAttribute
+            });
 
         protected override IReadOnlyCollection<string> RequiredAttributes { get; }
-            = IReadOnlyCollectionUtility.Create<string>(
+            = new HashSet<string>(new[]
+            {
                 ConfigurationConstants.PackageSourceAttribute,
-                ConfigurationConstants.PathAttribute);
+                ConfigurationConstants.PathAttribute
+            });
 
 
         internal override XNode AsXNode()
