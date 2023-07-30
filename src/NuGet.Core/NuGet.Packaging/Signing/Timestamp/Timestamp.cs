@@ -133,7 +133,7 @@ namespace NuGet.Packaging.Signing
             flags |= VerificationUtility.ValidateTimestamp(this, signature, treatIssueAsError, issues, SigningSpecifications.V1);
             if (flags == SignatureVerificationStatusFlags.NoErrors)
             {
-                issues.Add(SignatureLog.InformationLog(string.Format(CultureInfo.CurrentCulture, Strings.TimestampValue, GeneralizedTime.LocalDateTime.ToString()) + Environment.NewLine));
+                issues.Add(SignatureLog.InformationLog(string.Format(CultureInfo.CurrentCulture, Strings.TimestampValue, GeneralizedTime.LocalDateTime.ToString(CultureInfo.CurrentCulture)) + Environment.NewLine));
 
                 issues.Add(SignatureLog.InformationLog(string.Format(CultureInfo.CurrentCulture,
                     Strings.VerificationTimestamperCertDisplay,
@@ -142,9 +142,9 @@ namespace NuGet.Packaging.Signing
 
                 var certificateExtraStore = SignedCms.Certificates;
 
-                using (var chainHolder = new X509ChainHolder())
+                using (X509ChainHolder chainHolder = X509ChainHolder.CreateForTimestamping())
                 {
-                    var chain = chainHolder.Chain;
+                    IX509Chain chain = chainHolder.Chain2;
 
                     // This flag should only be set for verification scenarios, not signing.
                     chain.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid;
@@ -161,7 +161,7 @@ namespace NuGet.Packaging.Signing
                     }
 
                     var chainBuildSucceed = CertificateChainUtility.BuildCertificateChain(chain, timestamperCertificate, out var chainStatusList);
-                    var x509ChainString = CertificateUtility.X509ChainToString(chain, fingerprintAlgorithm);
+                    string x509ChainString = CertificateUtility.X509ChainToString(chain.PrivateReference, fingerprintAlgorithm);
 
                     if (!string.IsNullOrWhiteSpace(x509ChainString))
                     {
@@ -195,6 +195,8 @@ namespace NuGet.Packaging.Signing
 
                     if (CertificateChainUtility.TryGetStatusAndMessage(chainStatusList, X509ChainStatusFlags.UntrustedRoot, out messages))
                     {
+                        SignatureUtility.LogAdditionalContext(chain, issues);
+
                         issues.Add(SignatureLog.Error(NuGetLogCode.NU3028, string.Format(CultureInfo.CurrentCulture, Strings.VerifyTimestampChainBuildingIssue_UntrustedRoot, signature.FriendlyName)));
 
                         flags |= SignatureVerificationStatusFlags.UntrustedRoot;

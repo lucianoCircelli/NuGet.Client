@@ -112,7 +112,18 @@ namespace NuGet.CommandLine
             // If the SolutionDir is specified, use the .nuget directory under it to determine the solution-level settings
             if (!string.IsNullOrEmpty(SolutionDirectory))
             {
-                var path = Path.Combine(SolutionDirectory.TrimEnd(Path.DirectorySeparatorChar), NuGetConstants.NuGetSolutionSettingsFolder);
+                string path;
+                try
+                {
+                    path = Path.Combine(SolutionDirectory, NuGetConstants.NuGetSolutionSettingsFolder);
+                }
+                catch (ArgumentException e)
+                {
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture,
+                            LocalizedResourceManager.GetString("Error_InvalidSolutionDirectory"),
+                            SolutionDirectory),
+                        e);
+                }
 
                 var solutionSettingsFile = Path.GetFullPath(path);
 
@@ -189,8 +200,7 @@ namespace NuGet.CommandLine
                 packageSaveMode = EffectivePackageSaveMode;
             }
 
-            var missingPackageReferences = installedPackageReferences.Where(reference =>
-                !nuGetPackageManager.PackageExistsInPackagesFolder(reference.PackageIdentity, packageSaveMode)).Any();
+            var missingPackageReferences = installedPackageReferences.Any(reference => !nuGetPackageManager.PackageExistsInPackagesFolder(reference.PackageIdentity, packageSaveMode));
 
             if (!missingPackageReferences)
             {

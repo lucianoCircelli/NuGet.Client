@@ -127,7 +127,7 @@ namespace NuGet.SolutionRestoreManager
                     tfi.DownloadDependencies.AddRange(
                        targetFrameworkInfo2.PackageDownloads
                            .Cast<IVsReferenceItem>()
-                           .Select(ToPackageDownloadDependency));
+                           .SelectMany(ToPackageDownloadDependency));
                 }
 
                 if (cpvmEnabled && targetFrameworkInfo is IVsTargetFrameworkInfo3 targetFrameworkInfo3)
@@ -161,13 +161,15 @@ namespace NuGet.SolutionRestoreManager
             var targetPlatformMoniker = GetPropertyValueOrNull(properties, ProjectBuildProperties.TargetPlatformMoniker);
             var targetPlatformMinVersion = GetPropertyValueOrNull(properties, ProjectBuildProperties.TargetPlatformMinVersion);
             var clrSupport = GetPropertyValueOrNull(properties, ProjectBuildProperties.CLRSupport);
+            var windowsTargetPlatformMinVersion = GetPropertyValueOrNull(properties, ProjectBuildProperties.WindowsTargetPlatformMinVersion);
 
             return MSBuildProjectFrameworkUtility.GetProjectFramework(
                 projectFullPath,
                 targetFrameworkMoniker,
                 targetPlatformMoniker,
                 targetPlatformMinVersion,
-                clrSupport);
+                clrSupport,
+                windowsTargetPlatformMinVersion);
         }
 
         internal static ProjectRestoreMetadataFrameworkInfo ToProjectRestoreMetadataFrameworkInfo(
@@ -228,7 +230,8 @@ namespace NuGet.SolutionRestoreManager
             return WarningProperties.GetWarningProperties(
                         treatWarningsAsErrors: GetSingleOrDefaultPropertyValue(targetFrameworks, ProjectBuildProperties.TreatWarningsAsErrors, e => e),
                         warningsAsErrors: GetSingleOrDefaultNuGetLogCodes(targetFrameworks, ProjectBuildProperties.WarningsAsErrors, e => MSBuildStringUtility.GetNuGetLogCodes(e)),
-                        noWarn: GetSingleOrDefaultNuGetLogCodes(targetFrameworks, ProjectBuildProperties.NoWarn, e => MSBuildStringUtility.GetNuGetLogCodes(e)));
+                        noWarn: GetSingleOrDefaultNuGetLogCodes(targetFrameworks, ProjectBuildProperties.NoWarn, e => MSBuildStringUtility.GetNuGetLogCodes(e)),
+                        warningsNotAsErrors: GetSingleOrDefaultNuGetLogCodes(targetFrameworks, ProjectBuildProperties.WarningsNotAsErrors, e => MSBuildStringUtility.GetNuGetLogCodes(e)));
         }
 
         /// <summary>
@@ -297,6 +300,22 @@ namespace NuGet.SolutionRestoreManager
         internal static bool IsCentralPackageTransitivePinningEnabled(IEnumerable tfms)
         {
             return GetSingleNonEvaluatedPropertyOrNull(tfms, ProjectBuildProperties.CentralPackageTransitivePinningEnabled, MSBuildStringUtility.IsTrue);
+        }
+
+        internal static RestoreAuditProperties GetRestoreAuditProperties(IEnumerable tfms)
+        {
+            string enableAudit = GetSingleNonEvaluatedPropertyOrNull(tfms, ProjectBuildProperties.NuGetAudit, s => s);
+            string auditLevel = GetSingleNonEvaluatedPropertyOrNull(tfms, ProjectBuildProperties.NuGetAuditLevel, s => s);
+            string auditMode = GetSingleNonEvaluatedPropertyOrNull(tfms, ProjectBuildProperties.NuGetAuditMode, s => s);
+
+            return !string.IsNullOrEmpty(enableAudit) || !string.IsNullOrEmpty(auditLevel) || !string.IsNullOrEmpty(auditMode)
+                ? new RestoreAuditProperties()
+                {
+                    EnableAudit = enableAudit,
+                    AuditLevel = auditLevel,
+                    AuditMode = auditMode,
+                }
+                : null;
         }
 
         private static NuGetFramework GetToolFramework(IEnumerable targetFrameworks)
@@ -408,18 +427,21 @@ namespace NuGet.SolutionRestoreManager
             return dependency;
         }
 
-        private static DownloadDependency ToPackageDownloadDependency(IVsReferenceItem item)
+        private static IEnumerable<DownloadDependency> ToPackageDownloadDependency(IVsReferenceItem item)
         {
             var id = item.Name;
-            var versionRange = GetVersionRange(item);
-            if (!(versionRange.HasLowerAndUpperBounds && versionRange.MinVersion.Equals(versionRange.MaxVersion)))
+            var versionRanges = GetVersionRangeList(item);
+            foreach (var versionRange in versionRanges)
             {
-                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Resources.Error_PackageDownload_OnlyExactVersionsAreAllowed, versionRange.OriginalString));
+                if (!(versionRange.HasLowerAndUpperBounds && versionRange.MinVersion.Equals(versionRange.MaxVersion)))
+                {
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Resources.Error_PackageDownload_OnlyExactVersionsAreAllowed, versionRange.OriginalString));
+                }
+
+                var downloadDependency = new DownloadDependency(id, versionRange);
+
+                yield return downloadDependency;
             }
-
-            var downloadDependency = new DownloadDependency(id, versionRange);
-
-            return downloadDependency;
         }
 
         private static CentralPackageVersion ToCentralPackageVersion(IVsReferenceItem item)
@@ -481,6 +503,25 @@ namespace NuGet.SolutionRestoreManager
             }
 
             return versionRange != null;
+        }
+
+        private static IEnumerable<VersionRange> GetVersionRangeList(IVsReferenceItem item)
+        {
+            char[] splitChars = new[] { ';' };
+            string versionString = GetPropertyValueOrNull(item, "Version");
+
+            if (versionString != null)
+            {
+                var versions = versionString.Split(splitChars, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var version in versions)
+                {
+                    yield return VersionRange.Parse(version);
+                }
+            }
+            else
+            {
+                yield return VersionRange.All;
+            }
         }
 
         private static VersionRange GetVersionRange(IVsReferenceItem item)

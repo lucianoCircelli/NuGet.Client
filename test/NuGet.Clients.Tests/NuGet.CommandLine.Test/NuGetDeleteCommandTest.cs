@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using NuGet.Test.Utility;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -34,11 +35,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    String.Join(" ", args),
-                    waitForExit: true);
+                    String.Join(" ", args));
 
                 // Assert
-                Assert.Equal(0, r.Item1);
+                Assert.Equal(0, r.ExitCode);
                 Assert.False(File.Exists(packageFileName));
             }
         }
@@ -62,11 +62,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    String.Join(" ", args),
-                    waitForExit: true);
+                    String.Join(" ", args));
 
                 // Assert
-                Assert.Equal(0, r.Item1);
+                Assert.Equal(0, r.ExitCode);
                 Assert.False(File.Exists(packageFileName));
             }
         }
@@ -92,11 +91,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    String.Join(" ", args),
-                    waitForExit: true);
+                    String.Join(" ", args));
 
                 // Assert
-                Assert.Equal(0, r.Item1);
+                Assert.Equal(0, r.ExitCode);
                 //The specific version folder should be gone.
                 Assert.False(Directory.Exists(packageVersionFolder.FullName));
             }
@@ -124,11 +122,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    String.Join(" ", args),
-                    waitForExit: true);
+                    String.Join(" ", args));
 
                 // Assert
-                Assert.Equal(0, r.Item1);
+                Assert.Equal(0, r.ExitCode);
                 Assert.False(Directory.Exists(packageVersionFolder.FullName));
             }
         }
@@ -160,11 +157,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    $"delete testPackage1 1.1.0 -Source {source} -NonInteractive",
-                    waitForExit: true);
+                    $"delete testPackage1 1.1.0 -Source {source} -NonInteractive");
 
                 // Assert
-                Assert.Equal(0, r.Item1);
+                Assert.Equal(0, r.ExitCode);
                 Assert.False(File.Exists(packageFileName));
             }
         }
@@ -194,11 +190,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.Equal(0, r.Item1);
+                Assert.Equal(0, r.ExitCode);
                 Assert.True(deleteRequestIsCalled);
             }
         }
@@ -238,14 +233,13 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     NuGetExePath,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 server.Stop();
 
                 // Assert
-                Assert.True(0 == result.Item1, $"{result.Item2} {result.Item3}");
-                Assert.Contains("testPackage1 1.1.0 was deleted successfully.", result.Item2);
+                Assert.True(0 == result.ExitCode, $"{result.Output} {result.Errors}");
+                Assert.Contains("testPackage1 1.1.0 was deleted successfully.", result.Output);
             }
         }
 
@@ -287,14 +281,13 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     NuGetExePath,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 server.Stop();
 
                 // Assert
-                Assert.True(0 == result.Item1, $"{result.Item2} {result.Item3}");
-                Assert.Contains("testPackage1 1.1.0 was deleted successfully.", result.Item2);
+                Assert.True(0 == result.ExitCode, $"{result.Output} {result.Errors}");
+                Assert.Contains("testPackage1 1.1.0 was deleted successfully.", result.Output);
             }
         }
 
@@ -367,14 +360,13 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     NuGetExePath,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 server.Stop();
 
                 // Assert
-                Assert.True(0 == result.Item1, $"{result.Item2} {result.Item3}");
-                Assert.Contains("testPackage1 1.1.0 was deleted successfully.", result.Item2);
+                Assert.True(0 == result.ExitCode, $"{result.Output} {result.Errors}");
+                Assert.Contains("testPackage1 1.1.0 was deleted successfully.", result.Output);
             }
         }
 
@@ -401,15 +393,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 foreach (var serverWarning in serverWarnings)
                 {
                     if (!string.IsNullOrEmpty(serverWarning))
                     {
-                        Assert.Contains(serverWarning, r.Item2);
+                        Assert.Contains(serverWarning, r.Output);
                     }
                 }
             }
@@ -421,6 +412,40 @@ namespace NuGet.CommandLine.Test
         public void DeleteCommand_Failure_InvalidArguments(string args)
         {
             Util.TestCommandInvalidArguments(args);
+        }
+
+        [Fact]
+        public void DeleteCommand_WhenDeleteWithHttpSource_Warns()
+        {
+            var nugetexe = Util.GetNuGetExePath();
+
+            // Arrange
+            using (var server = new MockServer())
+            {
+                server.Start();
+                bool deleteRequestIsCalled = false;
+
+                server.Delete.Add("/nuget/testPackage1/1.1", request =>
+                {
+                    deleteRequestIsCalled = true;
+                    return HttpStatusCode.OK;
+                });
+
+                // Act
+                string[] args = new string[] {
+                    "delete", "testPackage1", "1.1.0",
+                    "-Source", server.Uri + "nuget", "-NonInteractive" };
+
+                var r = CommandRunner.Run(
+                    nugetexe,
+                    Directory.GetCurrentDirectory(),
+                    string.Join(" ", args));
+
+                // Assert
+                Assert.Equal(0, r.ExitCode);
+                Assert.True(deleteRequestIsCalled);
+                Assert.Contains("WARNING: You are running the 'delete' operation with an 'HTTP' source", r.AllOutput);
+            }
         }
 
         public static IEnumerable<object[]> ServerWarningData

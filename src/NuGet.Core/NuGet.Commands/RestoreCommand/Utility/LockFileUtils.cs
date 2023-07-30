@@ -31,7 +31,7 @@ namespace NuGet.Commands
             RestoreTargetGraph targetGraph,
             LibraryIncludeFlags dependencyType)
         {
-            return CreateLockFileTargetLibrary(
+            var (lockFileTargetLibrary, _) = CreateLockFileTargetLibrary(
                 aliases: null,
                 library,
                 package,
@@ -40,6 +40,7 @@ namespace NuGet.Commands
                 targetFrameworkOverride: null,
                 dependencies: null,
                 cache: new LockFileBuilderCache());
+            return lockFileTargetLibrary;
         }
 
         /// <summary>
@@ -53,8 +54,8 @@ namespace NuGet.Commands
         /// <param name="targetFrameworkOverride">The original framework if the asset selection is happening for a fallback framework.</param>
         /// <param name="dependencies">The dependencies of this package.</param>
         /// <param name="cache">The lock file build cache.</param>
-        /// <returns>The LockFileTargetLibrary</returns>
-        internal static LockFileTargetLibrary CreateLockFileTargetLibrary(
+        /// <returns>The LockFileTargetLibrary, and whether a fallback framework criteria was used to select it.</returns>
+        internal static (LockFileTargetLibrary, bool) CreateLockFileTargetLibrary(
                 string aliases,
                 LockFileLibrary library,
                 LocalPackageInfo package,
@@ -74,10 +75,11 @@ namespace NuGet.Commands
                     // This will throw an appropriate error if the nuspec is missing
                     var nuspec = package.Nuspec;
 
-                    var orderedCriteriaSets = cache.GetSelectionCriteria(targetGraph, framework);
+                    List<(List<SelectionCriteria> orderedCriteria, bool fallbackUsed)> orderedCriteriaSets = cache.GetLabeledSelectionCriteria(targetGraph, framework);
                     var contentItems = cache.GetContentItems(library, package);
 
                     var packageTypes = nuspec.GetPackageTypes().AsList();
+                    bool fallbackUsed = false;
 
                     for (var i = 0; i < orderedCriteriaSets.Count; i++)
                     {
@@ -95,7 +97,7 @@ namespace NuGet.Commands
 
                         if (lockFileLib.PackageType.Contains(PackageType.DotnetTool))
                         {
-                            AddToolsAssets(targetGraph.Conventions, lockFileLib, contentItems, orderedCriteriaSets[i]);
+                            AddToolsAssets(targetGraph.Conventions, lockFileLib, contentItems, orderedCriteriaSets[i].orderedCriteria);
                             if (CompatibilityChecker.HasCompatibleToolsAssets(lockFileLib))
                             {
                                 break;
@@ -104,18 +106,18 @@ namespace NuGet.Commands
                         else
                         {
                             AddAssets(aliases, library, package, targetGraph.Conventions, dependencyType, lockFileLib,
-                                framework, runtimeIdentifier, contentItems, nuspec, orderedCriteriaSets[i]);
+                                framework, runtimeIdentifier, contentItems, nuspec, orderedCriteriaSets[i].orderedCriteria);
                             // Check if compatible assets were found.
                             // If no compatible assets were found and this is the last check
                             // continue on with what was given, this will fail in the normal
                             // compat verification.
                             if (CompatibilityChecker.HasCompatibleAssets(lockFileLib))
                             {
+                                fallbackUsed = orderedCriteriaSets[i].fallbackUsed;
                                 // Stop when compatible assets are found.
                                 break;
                             }
                         }
-
                     }
 
                     // Add dependencies
@@ -124,42 +126,48 @@ namespace NuGet.Commands
                     // Exclude items
                     ExcludeItems(lockFileLib, dependencyType);
 
-                    return lockFileLib;
+                    lockFileLib.Freeze();
+
+                    return (lockFileLib, fallbackUsed);
                 });
         }
 
-        internal static List<List<SelectionCriteria>> CreateOrderedCriteriaSets(ManagedCodeConventions codeConventions, NuGetFramework framework, string runtimeIdentifier)
+        /// <summary>
+        /// Create an ordered criteria list in order, based on the framework and runtime identifier provided.
+        /// The boolean indicates whether the criteria is for a fallback version of the framework or not.
+        /// </summary> 
+        internal static List<(List<SelectionCriteria>, bool)> CreateOrderedCriteriaSets(ManagedCodeConventions codeConventions, NuGetFramework framework, string runtimeIdentifier)
         {
             // Create an ordered list of selection criteria. Each will be applied, if the result is empty
             // fallback frameworks from "imports" will be tried.
             // These are only used for framework/RID combinations where content model handles everything.
             // AssetTargetFallback and DualCompatbiility frameworks will provide multiple criteria since all assets need to be
             // evaluated before selecting the TFM to use.
-            var orderedCriteriaSets = new List<List<SelectionCriteria>>(1);
+            var orderedCriteriaSets = new List<(List<SelectionCriteria>, bool)>(1);
 
             var assetTargetFallback = framework as AssetTargetFallbackFramework;
 
             if (assetTargetFallback != null)
             {
                 // Add the root project framework first.
-                orderedCriteriaSets.Add(CreateCriteria(codeConventions, assetTargetFallback.RootFramework, runtimeIdentifier));
+                orderedCriteriaSets.Add((CreateCriteria(codeConventions, assetTargetFallback.RootFramework, runtimeIdentifier), false));
                 // Add the secondary framework if dual compatibility framework.
                 if (assetTargetFallback.RootFramework is DualCompatibilityFramework dualCompatibilityFramework)
                 {
-                    orderedCriteriaSets.Add(CreateCriteria(codeConventions, dualCompatibilityFramework.SecondaryFramework, runtimeIdentifier));
+                    orderedCriteriaSets.Add((CreateCriteria(codeConventions, dualCompatibilityFramework.SecondaryFramework, runtimeIdentifier), false));
                 }
 
                 // Add all fallbacks in order.
-                orderedCriteriaSets.AddRange(assetTargetFallback.Fallback.Select(e => CreateCriteria(codeConventions, e, runtimeIdentifier)));
+                orderedCriteriaSets.AddRange(assetTargetFallback.Fallback.Select(e => (CreateCriteria(codeConventions, e, runtimeIdentifier), true)));
             }
             else
             {
                 // Add the current framework.
-                orderedCriteriaSets.Add(CreateCriteria(codeConventions, framework, runtimeIdentifier));
+                orderedCriteriaSets.Add((CreateCriteria(codeConventions, framework, runtimeIdentifier), false));
 
                 if (framework is DualCompatibilityFramework dualCompatibilityFramework)
                 {
-                    orderedCriteriaSets.Add(CreateCriteria(codeConventions, dualCompatibilityFramework.SecondaryFramework, runtimeIdentifier));
+                    orderedCriteriaSets.Add((CreateCriteria(codeConventions, dualCompatibilityFramework.SecondaryFramework, runtimeIdentifier), false));
                 }
             }
 
@@ -188,7 +196,7 @@ namespace NuGet.Commands
             string runtimeIdentifier,
             ContentItemCollection contentItems,
             NuspecReader nuspec,
-            IReadOnlyList<SelectionCriteria> orderedCriteria)
+            List<SelectionCriteria> orderedCriteria)
         {
             // Add framework references for desktop projects.
             AddFrameworkReferences(lockFileLib, framework, nuspec);
@@ -261,7 +269,7 @@ namespace NuGet.Commands
             string libraryName,
             ManagedCodeConventions managedCodeConventions,
             LockFileTargetLibrary lockFileLib,
-            IReadOnlyList<SelectionCriteria> orderedCriteria,
+            List<SelectionCriteria> orderedCriteria,
             ContentItemCollection contentItems)
         {
             // Build Transitive
@@ -299,7 +307,7 @@ namespace NuGet.Commands
             ManagedCodeConventions managedCodeConventions,
             LockFileTargetLibrary lockFileLib,
             ContentItemCollection contentItems,
-            IReadOnlyList<SelectionCriteria> orderedCriteria)
+            List<SelectionCriteria> orderedCriteria)
         {
             var toolsGroup = GetLockFileItems(
                 orderedCriteria,
@@ -425,8 +433,8 @@ namespace NuGet.Commands
 
                         // Remove anything that starts with "lib/" and is NOT specified in the reference filter.
                         // runtimes/* is unaffected (it doesn't start with lib/)
-                        lockFileLib.RuntimeAssemblies = lockFileLib.RuntimeAssemblies.Where(p => !p.Path.StartsWith("lib/") || referenceFilter.Contains(Path.GetFileName(p.Path))).ToList();
-                        lockFileLib.CompileTimeAssemblies = lockFileLib.CompileTimeAssemblies.Where(p => !p.Path.StartsWith("lib/") || referenceFilter.Contains(Path.GetFileName(p.Path))).ToList();
+                        lockFileLib.RuntimeAssemblies = lockFileLib.RuntimeAssemblies.Where(p => !p.Path.StartsWith("lib/", StringComparison.Ordinal) || referenceFilter.Contains(Path.GetFileName(p.Path))).ToList();
+                        lockFileLib.CompileTimeAssemblies = lockFileLib.CompileTimeAssemblies.Where(p => !p.Path.StartsWith("lib/", StringComparison.Ordinal) || referenceFilter.Contains(Path.GetFileName(p.Path))).ToList();
                     }
                 }
             }
@@ -643,6 +651,8 @@ namespace NuGet.Commands
             // Exclude items
             ExcludeItems(projectLib, dependencyType);
 
+            projectLib.Freeze();
+
             return projectLib;
         }
 
@@ -669,7 +679,7 @@ namespace NuGet.Commands
         /// </summary>
         /// <remarks>Enumerate this once after calling.</remarks>
         private static IEnumerable<LockFileItem> GetLockFileItems(
-            IReadOnlyList<SelectionCriteria> criteria,
+            List<SelectionCriteria> criteria,
             ContentItemCollection items,
             Action<LockFileItem> additionalAction,
             params PatternSet[] patterns)
@@ -683,13 +693,18 @@ namespace NuGet.Commands
 
                 if (group != null)
                 {
-                    foreach (var item in group.Items)
+                    foreach (var item in group.Items.NoAllocEnumerate())
                     {
                         var newItem = new LockFileItem(item.Path);
                         object locale;
                         if (item.Properties.TryGetValue("locale", out locale))
                         {
                             newItem.Properties["locale"] = (string)locale;
+                        }
+                        object related;
+                        if (item.Properties.TryGetValue("related", out related))
+                        {
+                            newItem.Properties["related"] = (string)related;
                         }
                         additionalAction?.Invoke(newItem);
                         yield return newItem;
@@ -707,7 +722,7 @@ namespace NuGet.Commands
         /// </summary>
         /// <remarks>Enumerate this once after calling.</remarks>
         private static IEnumerable<LockFileItem> GetLockFileItems(
-            IReadOnlyList<SelectionCriteria> criteria,
+            List<SelectionCriteria> criteria,
             ContentItemCollection items,
             params PatternSet[] patterns)
         {
@@ -773,7 +788,7 @@ namespace NuGet.Commands
             NuGetFramework framework,
             string runtimeIdentifier)
         {
-            var managedCriteria = new List<SelectionCriteria>(1);
+            List<SelectionCriteria> managedCriteria;
 
             var fallbackFramework = framework as FallbackFramework;
 
@@ -786,7 +801,10 @@ namespace NuGet.Commands
                     framework,
                     runtimeIdentifier);
 
-                managedCriteria.Add(standardCriteria);
+                managedCriteria = new(capacity: 1)
+                {
+                    standardCriteria
+                };
             }
             else
             {
@@ -796,7 +814,10 @@ namespace NuGet.Commands
                     primaryFramework,
                     runtimeIdentifier);
 
-                managedCriteria.Add(primaryCriteria);
+                managedCriteria = new(capacity: 1 + fallbackFramework.Fallback.Count)
+                {
+                    primaryCriteria
+                };
 
                 // Add each fallback framework in order
                 foreach (var fallback in fallbackFramework.Fallback)
@@ -857,7 +878,7 @@ namespace NuGet.Commands
         /// </summary>
         private static bool GroupHasNonEmptyItems(IEnumerable<LockFileItem> group)
         {
-            return group?.Any(item => !item.Path.EndsWith(PackagingCoreConstants.ForwardSlashEmptyFolder)) == true;
+            return group?.Any(item => !item.Path.EndsWith(PackagingCoreConstants.ForwardSlashEmptyFolder, StringComparison.Ordinal)) == true;
         }
 
         /// <summary>
@@ -964,7 +985,7 @@ namespace NuGet.Commands
                 var rid = (string)group.Properties[ManagedCodeConventions.PropertyNames.RuntimeIdentifier];
 
                 // Create lock file entries for each assembly.
-                foreach (var item in group.Items)
+                foreach (var item in group.Items.NoAllocEnumerate())
                 {
                     results.Add(new LockFileRuntimeTarget(item.Path)
                     {
@@ -1005,12 +1026,6 @@ namespace NuGet.Commands
             {
                 // For csproj -> csproj type references where there is no range, use 1.0.0
                 range = VersionRange.Parse("1.0.0");
-            }
-            else
-            {
-                // For project dependencies drop the snapshot version.
-                // Ex: 1.0.0-* -> 1.0.0
-                range = range.ToNonSnapshotRange();
             }
 
             return new PackageDependency(dependency.Name, range);

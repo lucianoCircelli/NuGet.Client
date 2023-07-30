@@ -1,7 +1,4 @@
-<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.test.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>$(NETFXTargetFramework)</TargetFramework>
     <NETCoreWPFProject>true</NETCoreWPFProject>
@@ -11,29 +8,30 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="TestIVsPackageSourceProvider.cs" />
-    <Compile Include="Tests.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Include="Assets\**">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Test.Apex.VisualStudio" />
+    <PackageReference Include="Microsoft.Test.Apex.VisualStudio" ExcludeAssets="Compile" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.VisualStudio.Sdk" />
+    <PackageReference Include="MSTest.TestAdapter" />
+    <PackageReference Include="MSTest.TestFramework" />
     <PackageReference Include="Newtonsoft.Json" NoWarn="NU1605" />
     <PackageReference Include="Xunit.StaFact" />
   </ItemGroup>
-
+  
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio\NuGet.VisualStudio.csproj">
-      <EmbedInteropTypes>true</EmbedInteropTypes>
-    </ProjectReference>
+    <!-- Manually consuming compile-time assets from Microsoft.Test.Apex.VisualStudio and excluding ones that cause compile warnings -->
+    <Reference Include="$(PkgMicrosoft_Test_Apex_VisualStudio)\lib\net46\*.dll"
+               Exclude="$(PkgMicrosoft_Test_Apex_VisualStudio)\lib\net46\Microsoft.Test.Apex.PrismIntegration.dll;
+                        $(PkgMicrosoft_Test_Apex_VisualStudio)\lib\net46\Microsoft.Test.Apex.RemoteCodeInjector.dll;
+                        $(PkgMicrosoft_Test_Apex_VisualStudio)\lib\net46\Microsoft.Test.Apex.RemoteCodeInjector.x64.dll"
+               Name="%(Filename)" />
   </ItemGroup>
 
-  <Import Project="$(BuildCommonDirectory)common.targets" />
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio\NuGet.VisualStudio.csproj" />
+  </ItemGroup>
 </Project>

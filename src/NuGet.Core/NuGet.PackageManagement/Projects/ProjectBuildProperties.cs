@@ -27,6 +27,7 @@ namespace NuGet.ProjectManagement
         public const string TargetPlatformMoniker = nameof(TargetPlatformMoniker);
         public const string TargetPlatformMinVersion = nameof(TargetPlatformMinVersion);
         public const string CLRSupport = nameof(CLRSupport);
+        public const string WindowsTargetPlatformMinVersion = nameof(WindowsTargetPlatformMinVersion);
         public const string TargetPlatformVersion = nameof(TargetPlatformVersion);
         public const string Version = nameof(Version);
         public const string RestorePackagesPath = nameof(RestorePackagesPath);
@@ -38,6 +39,7 @@ namespace NuGet.ProjectManagement
         public const string RestoreAdditionalProjectFallbackFoldersExcludes = nameof(RestoreAdditionalProjectFallbackFoldersExcludes);
         public const string NoWarn = nameof(NoWarn);
         public const string WarningsAsErrors = nameof(WarningsAsErrors);
+        public const string WarningsNotAsErrors = nameof(WarningsNotAsErrors);
         public const string TreatWarningsAsErrors = nameof(TreatWarningsAsErrors);
         public const string DotnetCliToolTargetFramework = nameof(DotnetCliToolTargetFramework);
         public const string RestorePackagesWithLockFile = nameof(RestorePackagesWithLockFile);
@@ -54,5 +56,8 @@ namespace NuGet.ProjectManagement
         public const string CentralPackageVersionOverrideEnabled = nameof(CentralPackageVersionOverrideEnabled);
         public const string AssemblyName = nameof(AssemblyName);
         public const string CentralPackageTransitivePinningEnabled = nameof(CentralPackageTransitivePinningEnabled);
+        public const string NuGetAudit = nameof(NuGetAudit);
+        public const string NuGetAuditLevel = nameof(NuGetAuditLevel);
+        public const string NuGetAuditMode = nameof(NuGetAuditMode);
     }
 }

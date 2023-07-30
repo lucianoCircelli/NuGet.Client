@@ -36,7 +36,7 @@ namespace Msbuild.Integration.Test
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -50,7 +50,7 @@ namespace Msbuild.Integration.Test
                     Version = "1.0.0"
                 };
                 packageX.Files.Clear();
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -59,7 +59,7 @@ namespace Msbuild.Integration.Test
                 {
                     writer.Write(
 @"<packages>
-  <package id=""x"" version=""1.0.0"" targetFramework=""net461"" />
+  <package id=""x"" version=""1.0.0"" targetFramework=""net472"" />
 </packages>");
                 }
 
@@ -86,7 +86,7 @@ namespace Msbuild.Integration.Test
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -100,7 +100,7 @@ namespace Msbuild.Integration.Test
                     Version = "1.0.0"
                 };
                 packageX.Files.Clear();
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -109,7 +109,7 @@ namespace Msbuild.Integration.Test
                 {
                     writer.Write(
 @"<packages>
-  <package id=""x"" version=""1.0.0"" targetFramework=""net461"" />
+  <package id=""x"" version=""1.0.0"" targetFramework=""net472"" />
 </packages>");
                 }
 
@@ -136,7 +136,7 @@ namespace Msbuild.Integration.Test
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                NuGetFramework net461 = NuGetFramework.Parse("net461");
+                NuGetFramework net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -150,7 +150,7 @@ namespace Msbuild.Integration.Test
                     Version = "1.0.0"
                 };
                 packageX.Files.Clear();
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -191,7 +191,7 @@ namespace Msbuild.Integration.Test
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -206,7 +206,7 @@ namespace Msbuild.Integration.Test
                 };
                 packageX.Files.Clear();
                 projectA.AddPackageToAllFrameworks(packageX);
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -250,7 +250,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -265,7 +265,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 };
                 packageX.Files.Clear();
                 projectA.AddPackageToAllFrameworks(packageX);
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -309,7 +309,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -323,7 +323,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                     Version = "1.0.0"
                 };
                 packageX.Files.Clear();
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -332,7 +332,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 {
                     writer.Write(
 @"<packages>
-  <package id=""x"" version=""1.0.0"" targetFramework=""net461"" />
+  <package id=""x"" version=""1.0.0"" targetFramework=""net472"" />
 </packages>");
                 }
 
@@ -372,7 +372,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -386,7 +386,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                     Version = "1.0.0"
                 };
                 packageX.Files.Clear();
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -395,7 +395,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 {
                     writer.Write(
 @"<packages>
-  <package id=""x"" version=""1.0.0"" targetFramework=""net461"" />
+  <package id=""x"" version=""1.0.0"" targetFramework=""net472"" />
 </packages>");
                 }
 
@@ -437,7 +437,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var projectA = new SimpleTestProjectContext(
                     "a",
@@ -453,7 +453,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
 
                 packageX.Files.Clear();
                 projectA.AddPackageToAllFrameworks(packageX);
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -531,7 +531,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var project = SimpleTestProjectContext.CreateLegacyPackageReference(
                     "a",
@@ -546,7 +546,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
 
                 packageX.Files.Clear();
                 project.AddPackageToAllFrameworks(packageX);
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(project);
                 solution.Create(pathContext.SolutionRoot);
@@ -602,7 +602,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var project = new SimpleTestProjectContext("a", ProjectStyle.PackageReference, pathContext.SolutionRoot)
                 {
@@ -627,7 +627,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
 
                 packageX.Files.Clear();
                 project.AddPackageToAllFrameworks(packageX);
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(project);
                 solution.Create(pathContext.SolutionRoot);
@@ -656,7 +656,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var project = SimpleTestProjectContext.CreateLegacyPackageReference(
                     "a",
@@ -671,7 +671,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
 
                 packageX.Files.Clear();
                 project.AddPackageToAllFrameworks(packageX);
-                packageX.AddFile("lib/net461/a.dll");
+                packageX.AddFile("lib/net472/a.dll");
 
                 solution.Projects.Add(project);
                 solution.Create(pathContext.SolutionRoot);
@@ -711,7 +711,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var project = SimpleTestProjectContext.CreateLegacyPackageReference(
                     "a",
@@ -740,7 +740,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var net461 = NuGetFramework.Parse("net461");
+                var net461 = NuGetFramework.Parse("net472");
 
                 var project = SimpleTestProjectContext.CreateLegacyPackageReference(
                     "a",
@@ -763,6 +763,95 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
             }
 
             return Task.CompletedTask;
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public void MsbuildRestore_StaticGraphEvaluation_HandlesInvalidProjectFileException()
+        {
+            // Arrange
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Set up solution, project, and packages
+                var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+
+                var net461 = NuGetFramework.Parse("net472");
+
+                var projectA = new SimpleTestProjectContext("a", ProjectStyle.PackageReference, pathContext.SolutionRoot);
+
+                var projectB = new SimpleTestProjectContext("b", ProjectStyle.PackageReference, pathContext.SolutionRoot);
+
+                var projectAFrameworkContext = new SimpleTestProjectFrameworkContext(net461);
+
+                projectAFrameworkContext.ProjectReferences.Add(projectB);
+
+                var packageX = new SimpleTestPackageContext()
+                {
+                    Id = "x",
+                    Version = "1.0.0"
+                };
+                projectA.Frameworks.Add(projectAFrameworkContext);
+
+                projectA.AddPackageToAllFrameworks(packageX);
+
+                solution.Projects.Add(projectA);
+                solution.Create(pathContext.SolutionRoot);
+
+                File.Delete(projectB.ProjectPath);
+
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore /p:RestoreUseStaticGraphEvaluation=true {projectA.ProjectPath}", ignoreExitCode: true);
+
+                // Assert
+                Assert.True(result.ExitCode == 1, result.AllOutput);
+
+                result.AllOutput.Should().Contain($"error MSB4025: The project file could not be loaded. Could not find file '{projectB.ProjectPath}'");
+            }
+        }
+
+        [PlatformTheory(Platform.Windows)]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task MsbuildRestore_WithMissingProjectReferences_HandlesProjectReferencesToUnsupportedProjects(bool restoreUseStaticGraphEvaluation)
+        {
+            // Arrange
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Set up solution, project, and packages
+                var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+
+                var net461 = NuGetFramework.Parse("net472");
+
+                var projectA = new SimpleTestProjectContext("a", ProjectStyle.PackageReference, pathContext.SolutionRoot);
+
+                var projectB = new SimpleTestProjectContext("b", ProjectStyle.PackageReference, pathContext.SolutionRoot);
+
+                var projectAFrameworkContext = new SimpleTestProjectFrameworkContext(net461);
+
+                projectAFrameworkContext.ProjectReferences.Add(projectB);
+
+                var packageX = new SimpleTestPackageContext()
+                {
+                    Id = "x",
+                    Version = "1.0.0"
+                };
+
+                projectA.Frameworks.Add(projectAFrameworkContext);
+
+                projectA.AddPackageToAllFrameworks(packageX);
+
+                solution.Projects.Add(projectA);
+                solution.Create(pathContext.SolutionRoot);
+
+                File.WriteAllText(
+                   projectB.ProjectPath,
+                   @"<Project />");
+
+                await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageX);
+
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore /p:RestoreUseStaticGraphEvaluation={restoreUseStaticGraphEvaluation} {projectA.ProjectPath}", ignoreExitCode: true);
+
+                // Assert
+                result.ExitCode.Should().Be(0, result.AllOutput);
+            }
         }
 
         [PlatformTheory(Platform.Windows)]
@@ -968,6 +1057,163 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 managed.CompileTimeAssemblies.Should().Contain("lib/net472/managed.dll");
                 managed.Build.Should().Contain("build/net472/managed.targets");
             }
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public void MsbuildRestore_WithCPPCliVcxproj_WithProjectReferenceAndWindowsWindowsTargetPlatformMinVersion_Succeeds()
+        {
+            // Arrange
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Set up project
+                var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+                var cppCliProject = SimpleTestProjectContext.CreateNETCore("projectName", pathContext.SolutionRoot, NuGetFramework.Parse("net5.0-windows7.0"));
+                cppCliProject.Properties.Add("CLRSupport", "NetCore");
+                cppCliProject.Properties.Add("WindowsTargetPlatformMinVersion", "10.0");
+                cppCliProject.ProjectPath = Path.Combine(Path.GetDirectoryName(cppCliProject.ProjectPath), cppCliProject.ProjectName + ".vcxproj");
+                var managedProject = SimpleTestProjectContext.CreateNETCore("managedProject", pathContext.SolutionRoot, NuGetFramework.Parse("net5.0-windows10.0"));
+                cppCliProject.AddProjectToAllFrameworks(managedProject);
+                solution.Projects.Add(cppCliProject);
+                solution.Projects.Add(managedProject);
+                solution.Create(pathContext.SolutionRoot);
+
+                // Act
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot}");
+
+                // Assert
+                result.Success.Should().BeTrue(because: result.AllOutput);
+                File.Exists(cppCliProject.AssetsFileOutputPath).Should().BeTrue(because: result.AllOutput);
+                File.Exists(cppCliProject.TargetsOutput).Should().BeTrue(because: result.AllOutput);
+                File.Exists(cppCliProject.PropsOutput).Should().BeTrue(because: result.AllOutput);
+
+                var targetsSection = cppCliProject.AssetsFile.Targets.First(e => string.IsNullOrEmpty(e.RuntimeIdentifier));
+                targetsSection.Libraries.Should().Contain(e => e.Name.Equals("managedProject"), because: string.Join(",", targetsSection.Libraries));
+            }
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public async Task MsbuildRestore_PackagesConfigDependency_WithHttpSource_Warns()
+        {
+            // Arrange
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Set up solution, project, and packages
+                var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+
+                var net461 = NuGetFramework.Parse("net472");
+
+                var projectA = new SimpleTestProjectContext(
+                    "a",
+                    ProjectStyle.PackagesConfig,
+                    pathContext.SolutionRoot);
+                projectA.Frameworks.Add(new SimpleTestProjectFrameworkContext(net461));
+
+                var packageX = new SimpleTestPackageContext()
+                {
+                    Id = "x",
+                    Version = "1.0.0"
+                };
+                packageX.AddFile("lib/net472/a.dll");
+
+                pathContext.Settings.AddSource("http-feed", "http://api.source/index.json");
+                pathContext.Settings.AddSource("https-feed", "https://api.source/index.json");
+
+                solution.Projects.Add(projectA);
+                solution.Create(pathContext.SolutionRoot);
+
+                using (var writer = new StreamWriter(Path.Combine(Path.GetDirectoryName(projectA.ProjectPath), "packages.config")))
+                {
+                    writer.Write(
+@"<packages>
+  <package id=""x"" version=""1.0.0"" targetFramework=""net472"" />
+</packages>");
+                }
+
+                await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                    pathContext.PackageSource,
+                    packageX);
+
+                // Act
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+
+
+                // Assert
+                Assert.True(result.ExitCode == 0, result.AllOutput);
+                Assert.Contains("Added package 'x.1.0.0' to folder", result.AllOutput);
+                Assert.Contains("You are running the 'restore' operation with an 'http' source, 'http://api.source/index.json'. Support for 'http' sources will be removed in a future version.", result.Output);
+            }
+        }
+
+        [PlatformTheory(Platform.Windows)]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task MsbuildRestore_WithWarningsNotAsErrors_SucceedsAndRaisesWarning(bool useStaticGraphRestore)
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext("a", ProjectStyle.PackageReference, pathContext.SolutionRoot);
+            var net472 = FrameworkConstants.CommonFrameworks.Net472;
+            projectA.Frameworks.Add(new SimpleTestProjectFrameworkContext(net472));
+            // Add 1.0.0
+            projectA.AddPackageToAllFrameworks(new SimpleTestPackageContext()
+            {
+                Id = "x",
+                Version = "1.0.0"
+            });
+            // But create only 2.0.0 on the server.
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, new SimpleTestPackageContext { Id = "x", Version = "2.0.0" });
+            projectA.Properties.Add("TreatWarningsAsErrors", "true");
+            projectA.Properties.Add("WarningsNotAsErrors", "NU1603");
+            solution.Projects.Add(projectA);
+            solution.Create(pathContext.SolutionRoot);
+            CommandRunnerResult result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore /p:RestoreUseStaticGraphEvaluation={useStaticGraphRestore} {projectA.ProjectPath}", ignoreExitCode: true);
+
+            // Assert
+            result.Success.Should().BeTrue(because: result.AllOutput);
+            result.Output.Should().Contain("warning NU1603");
+
+        }
+
+        [Fact]
+        public void MsbuildRestore_WithLegacyCsproj_GlobalPackageReferencesAreProcessed()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            string projectPath = Path.Combine(pathContext.SolutionRoot, "ProjectA.proj");
+
+            File.WriteAllText(
+                Path.Combine(pathContext.SolutionRoot, "Directory.Packages.props"),
+                @$"<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <GlobalPackageReference Include=""PackageA"" Version=""1.2.3"" />
+    <GlobalPackageReference Include=""PackageB"" Version=""4.5.6"" />
+  </ItemGroup>
+</Project>");
+
+            // Writes out a project that simply prints out the <PackageReference /> and <PackageVersion /> items after the <GlobalPackageReference /> items have been processed by NuGet.targets
+            File.WriteAllText(
+                projectPath,
+                @$"<Project>
+  <Import Project=""$([System.IO.Path]::ChangeExtension('$(NuGetRestoreTargets)', '.props'))"" />
+  <Target Name=""PrintPackageReferences"">
+    <Message Text=""PackageReferences = @(PackageReference->'`%(Identity)` / `%(Version)`', ', ')"" Importance=""High"" />
+    <Message Text=""PackageVersions = @(PackageVersion->'`%(Identity)` / `%(Version)`', ', ')"" Importance=""High"" />
+  </Target>
+  <Import Project=""$(NuGetRestoreTargets)"" />
+</Project>");
+
+
+            CommandRunnerResult result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/NoAutoResponse /NoLogo /ConsoleLoggerParameters:Verbosity=Minimal;NoSummary;ForceNoAlign /Target:PrintPackageReferences {projectPath}", ignoreExitCode: false);
+
+            // Assert
+            result.Success.Should().BeTrue(because: result.AllOutput);
+            result.Output.Should().Contain("PackageReferences = `PackageA` / ``, `PackageB` / ``");
+            result.Output.Should().Contain("PackageVersions = `PackageA` / `1.2.3`, `PackageB` / `4.5.6`");
         }
     }
 }

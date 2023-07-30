@@ -13,6 +13,7 @@ using Moq;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
+using NuGet.PackageManagement.Telemetry;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
@@ -139,6 +140,81 @@ namespace NuGet.PackageManagement.UI.Test
             Assert.Equal(packageIdentityC.Id, addedResults[2].Id);
         }
 
+        [Theory]
+        [MemberData(nameof(GetInstallActionTestData))]
+        public async Task CreateInstallAction_OnInstallingProject_WithNewSourceMapping_DoesNotLogTelemetry(ContractsItemFilter activeTab, bool isSolutionLevel, string packageIdToInstall, bool? expectedPackageWasTransitive)
+        {
+            // Arrange
+            var telemetrySession = new Mock<ITelemetrySession>();
+            TelemetryEvent lastTelemetryEvent = null;
+            telemetrySession
+                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
+                .Callback<TelemetryEvent>(x => lastTelemetryEvent = x);
+            var telemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
+            TelemetryActivity.NuGetTelemetryService = telemetryService;
+
+            var sourceProvider = new Mock<ISourceRepositoryProvider>();
+            var settings = new Mock<ISettings>();
+            var nugetPM = new NuGetPackageManager(sourceProvider.Object, settings.Object, @"\packagesFolder");
+            var lockService = new NuGetLockService(ThreadHelper.JoinableTaskContext);
+            var uiEngine = new UIActionEngine(sourceProvider.Object, nugetPM, lockService);
+
+            var installedAndTransitive = new InstalledAndTransitivePackages(
+                new[] {
+                    new PackageReferenceContextInfo(new PackageIdentity("installedA", NuGetVersion.Parse("1.0.0")), NuGetFramework.Parse("net472")),
+                    new PackageReferenceContextInfo(new PackageIdentity("installedB", NuGetVersion.Parse("1.0.0")), NuGetFramework.Parse("net472"))
+                },
+                new[] {
+                    new TransitivePackageReferenceContextInfo(new PackageIdentity("transitiveA", NuGetVersion.Parse("1.0.0")), NuGetFramework.Parse("net472"))
+                });
+            var prjMgrSvc = new Mock<INuGetProjectManagerService>();
+            prjMgrSvc
+                .Setup(mgr => mgr.GetInstalledAndTransitivePackagesAsync(It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<IInstalledAndTransitivePackages>(installedAndTransitive));
+            prjMgrSvc
+                .Setup(mgr => mgr.GetInstalledAndTransitivePackagesAsync(It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<IInstalledAndTransitivePackages>(installedAndTransitive));
+            var dictMetadata = new Dictionary<string, object>
+            {
+                [NuGetProjectMetadataKeys.UniqueName] = "a",
+                [NuGetProjectMetadataKeys.ProjectId] = "a"
+            };
+            ProjectMetadataContextInfo metadataCtxtInfo = ProjectMetadataContextInfo.Create(dictMetadata);
+            prjMgrSvc
+                .Setup(mgr => mgr.GetMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<IProjectMetadataContextInfo>(metadataCtxtInfo));
+            var uiService = new Mock<INuGetUI>();
+            var uiContext = new Mock<INuGetUIContext>();
+            var projectContext = new Mock<INuGetProjectContext>();
+            var serviceBroker = new Mock<IServiceBroker>();
+            _ = serviceBroker.Setup(sb => sb.GetProxyAsync<INuGetProjectManagerService>(
+                    It.Is<ServiceRpcDescriptor>(s => s == NuGetServices.ProjectManagerService),
+                    It.IsAny<ServiceActivationOptions>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<INuGetProjectManagerService>(prjMgrSvc.Object));
+            uiContext.Setup(ctx => ctx.ServiceBroker).Returns(serviceBroker.Object);
+            uiService.Setup(ui => ui.UIContext).Returns(uiContext.Object);
+            uiService.Setup(ui => ui.ProjectContext).Returns(projectContext.Object);
+            uiService.Setup(ui => ui.Settings).Returns(settings.Object);
+            uiService.Setup(ui => ui.Projects).Returns(new[] { new ProjectContextInfo("a", ProjectModel.ProjectStyle.PackageReference, NuGetProjectKind.PackageReference) });
+
+            var action = UserAction.CreateInstallAction(packageIdToInstall, NuGetVersion.Parse("1.0.0"), isSolutionLevel, activeTab, sourceMappingSourceName: "source");
+
+            // Act
+            await uiEngine.PerformInstallOrUninstallAsync(uiService.Object, action, CancellationToken.None);
+
+            // Assert
+            Assert.NotNull(lastTelemetryEvent);
+            // expect cancelled action because we mocked just enough objects to emit telemetry
+            Assert.Equal(NuGetOperationStatus.Cancelled, lastTelemetryEvent[nameof(ActionEventBase.Status)]);
+            Assert.Equal(NuGetOperationType.Install, lastTelemetryEvent[nameof(ActionsTelemetryEvent.OperationType)]);
+            Assert.Equal(isSolutionLevel, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.IsSolutionLevel)]);
+            Assert.Equal(activeTab, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.Tab)]);
+            Assert.Equal(expectedPackageWasTransitive, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.PackageToInstallWasTransitive)]);
+            // Package Source Mapping is considered enabled if mappings already existed when the action began.
+            Assert.Equal(false, lastTelemetryEvent[VSActionsTelemetryEvent.PackageSourceMappingIsMappingEnabled]);
+        }
+
         [Fact]
         public void AddUiActionEngineTelemetryProperties_AddsVulnerabilityInfo_Succeeds()
         {
@@ -197,9 +273,44 @@ namespace NuGet.PackageManagement.UI.Test
             Assert.Equal(3, pkgSeverities.Count());
         }
 
+        [Theory]
+        [InlineData("packageA", "2.0.0", "*")]
+        [InlineData("packageA", "2.0.0", "(1.0.0, )")]
+        [InlineData("packageA", "2.0.0", null)]
+        public void ToTelemetryPackage_Succeeds(string packageId, string packageVersion, string packageVersionRange)
+        {
+            TelemetryEvent telemetryEvent = UIActionEngine.ToTelemetryPackage(packageId, packageVersion, packageVersionRange);
+
+            Assert.Equal(telemetryEvent.GetPiiData().First().Value.ToString(), VSTelemetryServiceUtility.NormalizePackageId(packageId));
+            Assert.Equal(telemetryEvent["version"], packageVersion);
+            Assert.Equal(telemetryEvent["versionRange"], packageVersionRange);
+        }
+
+        public static IEnumerable<object[]> GetTelemetryListTestData()
+        {
+            yield return new object[] { new List<Tuple<string, string>> { new Tuple<string, string>("packageA", "2.0.0") } };
+            yield return new object[] { new List<Tuple<string, string>> { new Tuple<string, string>("packageB", "1.0.0") } };
+        }
+
+        [Theory]
+        [MemberData(nameof(GetTelemetryListTestData))]
+        public void ToTelemetryPackageList_Succeeds(List<Tuple<string, string>> packages)
+        {
+            List<TelemetryEvent> telemetryEvents = UIActionEngine.ToTelemetryPackageList(packages);
+
+            Assert.Equal(packages.Count(), telemetryEvents.Count());
+
+            for (int index = 0; index < telemetryEvents.Count(); index++)
+            {
+                Assert.Equal(telemetryEvents[index].GetPiiData().First().Value.ToString(), VSTelemetryServiceUtility.NormalizePackageId(packages[index].Item1));
+                Assert.Equal(telemetryEvents[index]["version"], packages[index].Item2);
+            }
+        }
+
+
         public static IEnumerable<object[]> GetInstallActionTestData()
         {
-            foreach(var activeTab in Enum.GetValues(typeof(ContractsItemFilter)))
+            foreach (var activeTab in Enum.GetValues(typeof(ContractsItemFilter)))
             {
                 yield return new object[] { activeTab, true, "transitiveA", null, }; // don't care in expectedValue in this case (solution PM UI)
                 yield return new object[] { activeTab, false, "transitiveA", true, }; // installs a package that was a transitive dependency
@@ -209,7 +320,7 @@ namespace NuGet.PackageManagement.UI.Test
 
         [Theory]
         [MemberData(nameof(GetInstallActionTestData))]
-        public async Task CreateInstallAction_OnInstallingProject_EmitsPkgWasTransitiveTelemetryAndTabAndIsSolutionPropertiesAsync(ContractsItemFilter activeTab, bool isSolutionLevel, string packageIdToInstall, bool? expectedPkgWasTransitive)
+        public async Task CreateInstallAction_OnInstallingProject_EmitsPkgWasTransitiveTelemetryAndTabAndIsSolutionPropertiesAsync(ContractsItemFilter activeTab, bool isSolutionLevel, string packageIdToInstall, bool? expectedPackageWasTransitive)
         {
             // Arrange
             var telemetrySession = new Mock<ITelemetrySession>();
@@ -237,6 +348,9 @@ namespace NuGet.PackageManagement.UI.Test
             var prjMgrSvc = new Mock<INuGetProjectManagerService>();
             prjMgrSvc
                 .Setup(mgr => mgr.GetInstalledAndTransitivePackagesAsync(It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<IInstalledAndTransitivePackages>(installedAndTransitive));
+            prjMgrSvc
+                .Setup(mgr => mgr.GetInstalledAndTransitivePackagesAsync(It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
                 .Returns(new ValueTask<IInstalledAndTransitivePackages>(installedAndTransitive));
             var dictMetadata = new Dictionary<string, object>
             {
@@ -269,12 +383,12 @@ namespace NuGet.PackageManagement.UI.Test
 
             // Assert
             Assert.NotNull(lastTelemetryEvent);
-            // expect failed action because we mocked just enough objects to emit telemetry
-            Assert.Equal(NuGetOperationStatus.Failed, lastTelemetryEvent[nameof(ActionEventBase.Status)]);
+            // expect cancelled action because we mocked just enough objects to emit telemetry
+            Assert.Equal(NuGetOperationStatus.Cancelled, lastTelemetryEvent[nameof(ActionEventBase.Status)]);
             Assert.Equal(NuGetOperationType.Install, lastTelemetryEvent[nameof(ActionsTelemetryEvent.OperationType)]);
             Assert.Equal(isSolutionLevel, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.IsSolutionLevel)]);
             Assert.Equal(activeTab, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.Tab)]);
-            Assert.Equal(expectedPkgWasTransitive, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.PackageToInstallWasTransitive)]);
+            Assert.Equal(expectedPackageWasTransitive, lastTelemetryEvent[nameof(VSActionsTelemetryEvent.PackageToInstallWasTransitive)]);
         }
 
         private sealed class PackageIdentitySubclass : PackageIdentity

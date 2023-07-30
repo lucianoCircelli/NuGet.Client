@@ -12,6 +12,8 @@ In general a PR should be approved by the Subject Matter Expert (SME) of that co
 
 To commit the PR to the repo use the GitHub `Squash and Merge` button. We can't stress this enough. Always use `Squash and Merge` unless an exception is explicitly stated in this document.
 
+This repo has bots that manage all stale PRs. Stale PRs will be autoclosed.
+
 - *Do* favor having more than 1 reviewer.
 - *Do not* merge too quickly. Wait for at least 24h after the last significant changes before merging unless the change is urgent.
 - *Do* address all feedback. Not necessarily by accepting it, but by reaching a resolution with the reviewer. All comments need to be marked as resolved before merging.
@@ -31,7 +33,6 @@ GitHub merges have 2 means to specify a commit message when squash merging. Insp
 #### Draft Pull Requests
 
 Draft pull requests are allowed, but should have a clear plan for transition to a review ready pull request.
-Draft pull requests will be closed within 30 days.
 
 ### Branching strategy
 
@@ -58,7 +59,7 @@ The recommended pattern for release branches is slightly different. We should pr
 ### Solution and project folder structure and naming
 
 The NuGet.Client repo currently has only one solution file named `NuGet.sln`. We do not want/need to have more than one solution file.
-If deemed necessary by the team, we can consider solution filters at a future point.
+We have some Solution Filters (.slnf files), currently for projects specific to working with NuGet's Command line, VS, or UnitTests directly, and can consider more based on team and community feedback.
 
 - Every project in the NuGet.Client repo should be [PackageReference-based](https://docs.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files) based and if possible (read this as not .NET Framework WPF), an [SDK-based](https://docs.microsoft.com/en-us/visualstudio/msbuild/how-to-use-project-sdk) one.
 - The production source code is under the `src` folder.

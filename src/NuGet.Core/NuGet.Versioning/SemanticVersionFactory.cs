@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace NuGet.Versioning
@@ -9,20 +10,16 @@ namespace NuGet.Versioning
     public partial class SemanticVersion
     {
         // Reusable set of empty release labels
-#if NET45
-        internal static readonly string[] EmptyReleaseLabels = new string[0];
-#else
         internal static readonly string[] EmptyReleaseLabels = Array.Empty<string>();
-#endif
+
         /// <summary>
         /// Parses a SemVer string using strict SemVer rules.
         /// </summary>
         public static SemanticVersion Parse(string value)
         {
-            SemanticVersion ver = null;
-            if (!TryParse(value, out ver))
+            if (!TryParse(value, out SemanticVersion? ver))
             {
-                throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, Resources.Invalidvalue, value), nameof(value));
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Resources.Invalidvalue, value), nameof(value));
             }
 
             return ver;
@@ -32,22 +29,19 @@ namespace NuGet.Versioning
         /// Parse a version string
         /// </summary>
         /// <returns>false if the version is not a strict semver</returns>
-        public static bool TryParse(string value, out SemanticVersion version)
+        public static bool TryParse(string value, [NotNullWhen(true)] out SemanticVersion? version)
         {
             version = null;
 
             if (value != null)
             {
-                Version systemVersion = null;
-
-                var sections = ParseSections(value);
+                ParseSections(value, out string? versionString, out string[]? releaseLabels, out string? buildMetadata);
 
                 // null indicates the string did not meet the rules
-                if (sections != null
-                    && Version.TryParse(sections.Item1, out systemVersion))
+                if (Version.TryParse(versionString, out Version? systemVersion))
                 {
                     // validate the version string
-                    var parts = sections.Item1.Split('.');
+                    var parts = versionString!.Split('.');
 
                     if (parts.Length != 3)
                     {
@@ -65,11 +59,11 @@ namespace NuGet.Versioning
                     }
 
                     // labels
-                    if (sections.Item2 != null)
+                    if (releaseLabels != null)
                     {
-                        for (int i = 0; i < sections.Item2.Length; i++)
+                        for (int i = 0; i < releaseLabels.Length; i++)
                         {
-                            if (!IsValidPart(sections.Item2[i], allowLeadingZeros: false))
+                            if (!IsValidPart(releaseLabels[i], allowLeadingZeros: false))
                             {
                                 return false;
                             }
@@ -77,8 +71,8 @@ namespace NuGet.Versioning
                     }
 
                     // build metadata
-                    if (sections.Item3 != null
-                        && !IsValid(sections.Item3, true))
+                    if (buildMetadata != null
+                        && !IsValid(buildMetadata, true))
                     {
                         return false;
                     }
@@ -86,8 +80,8 @@ namespace NuGet.Versioning
                     var ver = NormalizeVersionValue(systemVersion);
 
                     version = new SemanticVersion(version: ver,
-                        releaseLabels: sections.Item2,
-                        metadata: sections.Item3 ?? string.Empty);
+                        releaseLabels: releaseLabels,
+                        metadata: buildMetadata ?? string.Empty);
 
                     return true;
                 }
@@ -180,11 +174,11 @@ namespace NuGet.Versioning
         /// to parsing and validating a semver. Regex would be much cleaner, but
         /// due to the number of versions created in NuGet Regex is too slow.
         /// </summary>
-        internal static Tuple<string, string[], string> ParseSections(string value)
+        internal static void ParseSections(string value, out string? versionString, out string[]? releaseLabels, out string? buildMetadata)
         {
-            string versionString = null;
-            string[] releaseLabels = null;
-            string buildMetadata = null;
+            versionString = null;
+            releaseLabels = null;
+            buildMetadata = null;
 
             var dashPos = -1;
             var plusPos = -1;
@@ -231,8 +225,6 @@ namespace NuGet.Versioning
                     buildMetadata = value.Substring(start, endPos - start);
                 }
             }
-
-            return new Tuple<string, string[], string>(versionString, releaseLabels, buildMetadata);
         }
 
         internal static Version NormalizeVersionValue(Version version)
@@ -252,11 +244,11 @@ namespace NuGet.Versioning
             return normalized;
         }
 
-        private static string[] ParseReleaseLabels(string releaseLabels)
+        private static string[]? ParseReleaseLabels(string? releaseLabels)
         {
             if (!string.IsNullOrEmpty(releaseLabels))
             {
-                return releaseLabels.Split('.');
+                return releaseLabels!.Split('.');
             }
 
             return null;

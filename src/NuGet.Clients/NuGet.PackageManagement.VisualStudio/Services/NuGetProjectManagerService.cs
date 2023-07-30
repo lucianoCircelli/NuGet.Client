@@ -164,6 +164,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         public async ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(
             IReadOnlyCollection<string> projectIds,
+            bool includeTransitiveOrigins,
             CancellationToken cancellationToken)
         {
             Assumes.NotNullOrEmpty(projectIds);
@@ -179,7 +180,7 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 if (project is IPackageReferenceProject packageReferenceProject)
                 {
-                    prStyleTasks.Add(packageReferenceProject.GetInstalledAndTransitivePackagesAsync(cancellationToken));
+                    prStyleTasks.Add(packageReferenceProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins, cancellationToken));
                 }
                 else
                 {
@@ -198,6 +199,10 @@ namespace NuGet.PackageManagement.VisualStudio
             TransitivePackageReferenceContextInfo[] transitivePackageContextInfos = prStyleReferences.SelectMany(e => e.TransitivePackages).Select(pr => TransitivePackageReferenceContextInfo.Create(pr)).ToArray();
             return new InstalledAndTransitivePackages(installedPackagesContextInfos, transitivePackageContextInfos);
         }
+
+        public async ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(
+            IReadOnlyCollection<string> projectIds,
+            CancellationToken cancellationToken) => await GetInstalledAndTransitivePackagesAsync(projectIds, includeTransitiveOrigins: false, cancellationToken);
 
         public async ValueTask<IReadOnlyCollection<PackageDependencyInfo>> GetInstalledPackagesDependencyInfoAsync(
             string projectId,
@@ -267,6 +272,30 @@ namespace NuGet.PackageManagement.VisualStudio
             }
 
             return targetFrameworks;
+        }
+
+        public async ValueTask<bool> IsCentralPackageManagementEnabledAsync(string projectId, CancellationToken cancellationToken)
+        {
+            Assumes.NotNullOrEmpty(projectId);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            NuGetProject? project = await SolutionUtility.GetNuGetProjectAsync(
+                _sharedState.SolutionManager,
+                projectId,
+                cancellationToken);
+
+            Assumes.NotNull(project);
+
+            if (project is BuildIntegratedNuGetProject buildIntegratedProject)
+            {
+                var dgcContext = new DependencyGraphCacheContext();
+                IReadOnlyList<ProjectModel.PackageSpec>? packageSpecs = await buildIntegratedProject.GetPackageSpecsAsync(dgcContext);
+
+                return packageSpecs.Any(spec => spec.RestoreMetadata.CentralPackageVersionsEnabled);
+            }
+
+            return false;
         }
 
         public async ValueTask<IProjectMetadataContextInfo> GetMetadataAsync(string projectId, CancellationToken cancellationToken)
@@ -401,7 +430,7 @@ namespace NuGet.PackageManagement.VisualStudio
             IReadOnlyList<string> packageSourceNames,
             CancellationToken cancellationToken)
         {
-            return await GetInstallActionsAsync(projectIds, packageIdentity, versionConstraints, includePrerelease, dependencyBehavior, packageSourceNames, versionRange: null, cancellationToken);
+            return await GetInstallActionsAsync(projectIds, packageIdentity, versionConstraints, includePrerelease, dependencyBehavior, packageSourceNames, versionRange: null, newMappingID: null, newMappingSource: null, cancellationToken);
         }
 
         public async ValueTask<IReadOnlyList<ProjectAction>> GetInstallActionsAsync(
@@ -412,6 +441,8 @@ namespace NuGet.PackageManagement.VisualStudio
             DependencyBehavior dependencyBehavior,
             IReadOnlyList<string> packageSourceNames,
             VersionRange? versionRange,
+            string? newMappingID,
+            string? newMappingSource,
             CancellationToken cancellationToken)
         {
             Assumes.NotNullOrEmpty(projectIds);
@@ -452,6 +483,8 @@ namespace NuGet.PackageManagement.VisualStudio
                     projectContext,
                     sourceRepositories,
                     versionRange,
+                    newMappingID,
+                    newMappingSource,
                     cancellationToken);
 
                 var projectActions = new List<ProjectAction>();
@@ -670,7 +703,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         private static string CreateProjectActionId()
         {
-            return Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+            return Guid.NewGuid().ToString("N", provider: null);
         }
 
         private async Task<IReadOnlyList<NuGetProject>> GetProjectsAsync(

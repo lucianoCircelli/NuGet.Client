@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,7 +55,7 @@ namespace NuGet.VisualStudio.Telemetry
             }
 
             var data = new Dictionary<string, Data>(_sources.Count);
-            foreach (var source in _sources.Keys)
+            foreach ((var source, _) in _sources)
             {
                 data[source] = new Data();
             }
@@ -316,17 +317,17 @@ namespace NuGet.VisualStudio.Telemetry
 
             foreach (var pair in statusCodes)
             {
-                subevent[pair.Key.ToString()] = pair.Value;
+                subevent[pair.Key.ToString(CultureInfo.CurrentCulture)] = pair.Value;
             }
 
             return subevent;
         }
 
-        private static string GetMsFeed(PackageSource source)
+        internal static string GetMsFeed(PackageSource source)
         {
             if (source.IsHttp)
             {
-                if (TelemetryUtility.IsNuGetOrg(source.Source))
+                if (UriUtility.IsNuGetOrg(source.Source))
                 {
                     return "nuget.org";
                 }

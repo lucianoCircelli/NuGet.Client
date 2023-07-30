@@ -100,15 +100,6 @@ $MSBuildExe = Get-MSBuildExe
 
 Invoke-BuildStep 'Running Restore' {
     # Restore
-    $restoreArgs = "build\build.proj", "/t:EnsurePackageReferenceVersionsInSolution", "/p:Configuration=$Configuration"
-    if ($Binlog)
-    {
-        $restoreArgs += "-bl:msbuild.ensurepr.binlog"
-    }
-
-    Trace-Log ". `"$MSBuildExe`" $restoreArgs"
-    & $MSBuildExe @restoreArgs
-
     $restoreArgs = "build\build.proj", "/t:RestoreVS", "/p:Configuration=$Configuration", "/p:ReleaseLabel=$ReleaseLabel", "/p:IncludeApex=$IncludeApex", "/v:m", "/m"
 
     if ($BuildNumber)
@@ -166,10 +157,15 @@ Invoke-BuildStep $VSMessage {
 -ev +BuildErrors
 
 Invoke-BuildStep 'Creating the EndToEnd test package' {
-        param($Configuration)
-        $EndToEndScript = Join-Path $PSScriptRoot scripts\cibuild\CreateEndToEndTestPackage.ps1 -Resolve
-        $OutDir = Join-Path $Artifacts VS15
-        & $EndToEndScript -c $Configuration -out $OutDir
+        $msbuildArgs = "test\TestUtilities\CreateEndToEndTestPackage\CreateEndToEndTestPackage.proj", "/p:Configuration=$Configuration", "/restore:false", "/property:BuildProjectReferences=false"
+
+        if ($Binlog)
+        {
+            $restoreArgs += "-bl:msbuild.createendtoendtestpackage.binlog"
+        }
+
+        Trace-Log ". `"$MSBuildExe`" $msbuildArgs"
+        & $MSBuildExe @msbuildArgs
     } `
     -args $Configuration `
     -skip:(-not $PackageEndToEnd) `

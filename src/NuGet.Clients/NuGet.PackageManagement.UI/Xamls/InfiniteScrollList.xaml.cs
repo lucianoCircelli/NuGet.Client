@@ -33,8 +33,10 @@ namespace NuGet.PackageManagement.UI
     {
         private readonly LoadingStatusIndicator _loadingStatusIndicator = new LoadingStatusIndicator();
         private ScrollViewer _scrollViewer;
+        private static TimeSpan PollingDelay = TimeSpan.FromMilliseconds(100);
 
         public event SelectionChangedEventHandler SelectionChanged;
+        public event RoutedEventHandler GroupExpansionChanged;
 
         public delegate void UpdateButtonClickEventHandler(PackageItemViewModel[] selectedPackages);
         public event UpdateButtonClickEventHandler UpdateButtonClicked;
@@ -387,6 +389,7 @@ namespace NuGet.PackageManagement.UI
             while (currentLoader.State.LoadingStatus == LoadingStatus.Loading)
             {
                 token.ThrowIfCancellationRequested();
+                await Task.Delay(PollingDelay, token);
                 await currentLoader.UpdateStateAsync(progress, token);
             }
         }
@@ -400,6 +403,7 @@ namespace NuGet.PackageManagement.UI
                 currentLoader.State.ItemsCount == 0)
             {
                 token.ThrowIfCancellationRequested();
+                await Task.Delay(PollingDelay, token);
                 await currentLoader.UpdateStateAsync(progress, token);
             }
         }
@@ -532,7 +536,14 @@ namespace NuGet.PackageManagement.UI
             // existing items in the package list
             foreach (var package in PackageItems)
             {
-                package.UpdatePackageStatus(installedPackages);
+                if (package.PackageLevel == PackageLevel.TopLevel)
+                {
+                    package.UpdatePackageStatus(installedPackages);
+                }
+                else
+                {
+                    package.UpdateTransitivePackageStatus(package.InstalledVersion);
+                }
             }
         }
 
@@ -735,12 +746,17 @@ namespace NuGet.PackageManagement.UI
         internal void AddPackageLevelGrouping()
         {
             ItemsView.Refresh();
-            if (ItemsView.OfType<PackageItemViewModel>()
-                    .Where(p => p.PackageLevel == PackageLevel.Transitive)
-                    .Any() == true)
+            if (ItemsView
+                    .OfType<PackageItemViewModel>()
+                    .Any(p => p.PackageLevel == PackageLevel.Transitive))
             {
                 ItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PackageItemViewModel.PackageLevel)));
             }
+        }
+
+        private void Expander_ExpansionStateToggled(object sender, RoutedEventArgs e)
+        {
+            GroupExpansionChanged?.Invoke(sender, e);
         }
     }
 }

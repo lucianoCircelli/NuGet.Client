@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Microsoft.ServiceHub.Framework;
+using NuGet.PackageManagement.UI.ViewModels;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging.Core;
 using NuGet.Versioning;
@@ -35,7 +36,7 @@ namespace NuGet.PackageManagement.UI
 
         // all versions of the _searchResultPackage
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields")]
-        protected List<(NuGetVersion version, bool isDeprecated)> _allPackageVersions;
+        protected List<(NuGetVersion version, bool isDeprecated, bool isVulnerable)> _allPackageVersions;
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields")]
         protected PackageItemViewModel _searchResultPackage;
@@ -50,11 +51,14 @@ namespace NuGet.PackageManagement.UI
 
         protected DetailControlModel(
             IServiceBroker serviceBroker,
-            IEnumerable<IProjectContextInfo> projects)
+            IEnumerable<IProjectContextInfo> projects,
+            INuGetUI uiController)
         {
             _nugetProjects = projects;
             ServiceBroker = serviceBroker;
-            _options = new Options();
+
+            _options = new OptionsViewModel();
+            PackageSourceMappingViewModel = PackageSourceMappingActionViewModel.Create(uiController);
 
             // Show dependency behavior and file conflict options if any of the projects are non-build integrated
             _options.ShowClassicOptions = projects.Any(project => project.ProjectKind == NuGetProjectKind.PackagesConfig);
@@ -117,6 +121,8 @@ namespace NuGet.PackageManagement.UI
             RecommenderVersion = recommenderVersion;
         }
 
+        public abstract void SetInstalledOrUpdateButtonIsEnabled();
+
         /// <summary>
         /// Sets the package to be displayed in the detail control.
         /// </summary>
@@ -134,13 +140,14 @@ namespace NuGet.PackageManagement.UI
 
             _searchResultPackage = searchResultPackage;
             _filter = filter;
+            PackageSourceMappingViewModel.PackageId = searchResultPackage.Id;
             OnPropertyChanged(nameof(Id));
             OnPropertyChanged(nameof(PackagePath));
             OnPropertyChanged(nameof(IconUrl));
             OnPropertyChanged(nameof(IconBitmap));
             OnPropertyChanged(nameof(PrefixReserved));
 
-            var getVersionsTask = searchResultPackage.GetVersionsAsync();
+            Task<IReadOnlyCollection<VersionInfoContextInfo>> getVersionsTask = searchResultPackage.GetVersionsAsync(_nugetProjects);
 
             _projectVersionConstraints = new List<ProjectVersionConstraint>();
 
@@ -214,9 +221,9 @@ namespace NuGet.PackageManagement.UI
             }
 
             // Show the current package version as the only package in the list at first just in case fetching the versions takes a while.
-            _allPackageVersions = new List<(NuGetVersion version, bool isDeprecated)>()
+            _allPackageVersions = new List<(NuGetVersion version, bool isDeprecated, bool isVulnerable)>()
             {
-                (searchResultPackage.Version, false)
+                (searchResultPackage.Version, false, false)
             };
 
             await CreateVersionsAsync(CancellationToken.None);
@@ -256,7 +263,7 @@ namespace NuGet.PackageManagement.UI
                 var detailedPackageMetadata = new DetailedPackageMetadata(
                     packageSearchMetadata,
                     packageDeprecationMetadata,
-                    packageSearchMetadata.DownloadCount);
+                    searchResultPackage.DownloadCount);
 
                 _metadataDict[detailedPackageMetadata.Version] = detailedPackageMetadata;
 
@@ -264,15 +271,17 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        private (NuGetVersion version, bool isDeprecated) GetVersion(VersionInfoContextInfo versionInfo)
+        private (NuGetVersion version, bool isDeprecated, bool isVulnerable) GetVersion(VersionInfoContextInfo versionInfo)
         {
             var isDeprecated = false;
+            var isVulnerable = false;
             if (versionInfo.PackageSearchMetadata != null)
             {
                 isDeprecated = versionInfo.PackageDeprecationMetadata != null;
+                isVulnerable = versionInfo.PackageSearchMetadata.Vulnerabilities != null;
             }
 
-            return (versionInfo.Version, isDeprecated);
+            return (versionInfo.Version, isDeprecated, isVulnerable);
         }
 
         protected virtual void DependencyBehavior_SelectedChanged(object sender, EventArgs e)
@@ -522,7 +531,7 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        private string GetPackageDeprecationAlternatePackageText(AlternatePackageMetadataContextInfo alternatePackageMetadata)
+        private static string GetPackageDeprecationAlternatePackageText(AlternatePackageMetadataContextInfo alternatePackageMetadata)
         {
             if (alternatePackageMetadata == null)
             {
@@ -590,7 +599,7 @@ namespace NuGet.PackageManagement.UI
                     // Clear detailed view
                     PackageMetadata = null;
 
-                    if (_selectedVersion != null)
+                    if (_selectedVersion != null && _searchResultPackage != null)
                     {
                         var loadCts = new CancellationTokenSource();
                         var oldCts = Interlocked.Exchange(ref _selectedVersionCancellationTokenSource, loadCts);
@@ -686,34 +695,49 @@ namespace NuGet.PackageManagement.UI
                 // The project level is the only one that has an editable combobox and we can only see one project.
                 if (!IsSolution && _nugetProjects.Count() == 1 && _nugetProjects.First().ProjectStyle.Equals(ProjectModel.ProjectStyle.PackageReference))
                 {
-                    // For the Updates and Browse tab we select the latest version, for the installed tab
-                    // select the installed version by default. Otherwise, select the first version in the version list.
-                    IEnumerable<DisplayVersion> possibleVersions = _versions.Where(v => v != null);
-                    if (_filter.Equals(ItemFilter.UpdatesAvailable) || _filter.Equals(ItemFilter.All))
-                    {
-                        SelectedVersion = possibleVersions.FirstOrDefault(v => v.Range.OriginalString.Equals(latestVersion.ToString(), StringComparison.OrdinalIgnoreCase));
-                        UserInput = SelectedVersion.ToString();
-                    }
-                    else
-                    {
-                        SelectedVersion =
-                            possibleVersions.FirstOrDefault(v => StringComparer.OrdinalIgnoreCase.Equals(v.Range?.OriginalString, _searchResultPackage?.AllowedVersions?.OriginalString))
-                            ?? possibleVersions.FirstOrDefault(v => v.IsValidVersion);
-                        UserInput = _searchResultPackage.AllowedVersions?.OriginalString ?? SelectedVersion.ToString();
-                    }
-
-                    if (FirstDisplayedVersion == null)
-                    {
-                        FirstDisplayedVersion = SelectedVersion;
-                    }
+                    SelectVersionPackageReferenceProject(latestVersion);
                 }
                 else
                 {
-                    var possibleVersions = _versions.Where(v => v != null);
-                    SelectedVersion =
-                        possibleVersions.FirstOrDefault(v => v.Version.Equals(_searchResultPackage.InstalledVersion))
-                        ?? possibleVersions.FirstOrDefault(v => v.IsValidVersion);
+                    SelectVersionNonPackageReferenceProject(latestVersion);
                 }
+            }
+        }
+
+        private void SelectVersionNonPackageReferenceProject(NuGetVersion latestVersion)
+        {
+            IEnumerable<DisplayVersion> possibleVersions = _versions.Where(v => v != null);
+            if (_filter.Equals(ItemFilter.UpdatesAvailable) || _filter.Equals(ItemFilter.All))
+            {
+                SelectedVersion = possibleVersions.FirstOrDefault(v => v.Version.Equals(latestVersion));
+            }
+            else
+            {
+                SelectedVersion =
+                    possibleVersions.FirstOrDefault(v => v.Version.Equals(_searchResultPackage.InstalledVersion))
+                    ?? possibleVersions.FirstOrDefault(v => v.IsValidVersion);
+            }
+        }
+
+        private void SelectVersionPackageReferenceProject(NuGetVersion latestVersion)
+        {
+            // For the Updates and Browse tab we select the latest version, for the installed tab
+            // select the installed version by default. Otherwise, select the first version in the version list.
+            IEnumerable<DisplayVersion> possibleVersions = _versions.Where(v => v != null);
+            if (_filter.Equals(ItemFilter.UpdatesAvailable) || _filter.Equals(ItemFilter.All))
+            {
+                SelectedVersion = possibleVersions.FirstOrDefault(v => v.Range.OriginalString.Equals(latestVersion.ToString(), StringComparison.OrdinalIgnoreCase));
+                FirstDisplayedVersion = SelectedVersion;
+                UserInput = SelectedVersion.ToString();
+            }
+            else
+            {
+                var installedVersion = _searchResultPackage?.AllowedVersions?.OriginalString ?? _searchResultPackage?.InstalledVersion.ToNormalizedString();
+                SelectedVersion =
+                    possibleVersions.FirstOrDefault(v => StringComparer.OrdinalIgnoreCase.Equals(v.Range?.OriginalString, installedVersion))
+                    ?? possibleVersions.FirstOrDefault(v => v.IsValidVersion);
+                FirstDisplayedVersion = SelectedVersion;
+                UserInput = _searchResultPackage.AllowedVersions?.OriginalString ?? SelectedVersion.ToString();
             }
         }
 
@@ -787,9 +811,9 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        private Options _options;
+        private OptionsViewModel _options;
 
-        public Options Options
+        public OptionsViewModel Options
         {
             get { return _options; }
             set
@@ -799,9 +823,15 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
+        public PackageSourceMappingActionViewModel PackageSourceMappingViewModel { get; }
+
+        public bool CanInstallWithPackageSourceMapping => !PackageSourceMappingViewModel.IsPackageSourceMappingEnabled || PackageSourceMappingViewModel.IsPackageMapped;
+
         public IEnumerable<IProjectContextInfo> NuGetProjects => _nugetProjects;
 
         public string PackagePath => _searchResultPackage?.PackagePath;
+
+        public bool IsCentralPackageManagementEnabled { get; set; }
 
         protected void AddBlockedVersions(List<NuGetVersion> blockedVersions)
         {
@@ -827,7 +857,7 @@ namespace NuGet.PackageManagement.UI
             // add all the versions blocked to disable the update button
             foreach (var version in blockedVersions)
             {
-                _versions.Add(new DisplayVersion(version, string.Empty, isValidVersion: false));
+                _versions.Add(new DisplayVersion(version, additionalInfo: null, isValidVersion: false));
             }
         }
 

@@ -19,15 +19,14 @@ using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Threading;
-using NuGet.Options;
 using NuGet.PackageManagement;
 using NuGet.PackageManagement.UI;
+using NuGet.PackageManagement.UI.Options;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.ProjectManagement;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common;
 using NuGet.VisualStudio.Common.Telemetry;
-using NuGet.VisualStudio.Common.Telemetry.PowerShell;
 using NuGet.VisualStudio.Internal.Contracts;
 using NuGet.VisualStudio.Telemetry;
 using NuGetConsole;
@@ -52,8 +51,9 @@ namespace NuGetVSExtension
         Style = VsDockStyle.Tabbed,
         Window = "{34E76E81-EE4A-11D0-AE2E-00A0C90FFFC3}", // this is the guid of the Output tool window, which is present in both VS and VWD
         Orientation = ToolWindowOrientation.Right)]
-    [ProvideOptionPage(typeof(PackageSourceOptionsPage), "NuGet Package Manager", "Package Sources", 113, 114, true)]
     [ProvideOptionPage(typeof(GeneralOptionPage), "NuGet Package Manager", "General", 113, 115, true)]
+    [ProvideOptionPage(typeof(PackageSourceOptionsPage), "NuGet Package Manager", "Package Sources", 113, 114, true, Sort = 0)]
+    [ProvideOptionPage(typeof(PackageSourceMappingOptionsPage), "NuGet Package Manager", "Package Source Mapping", 113, 116, true, Sort = 1)]
     [ProvideSearchProvider(typeof(NuGetSearchProvider), "NuGet Search")]
     // UI Context rule for a project that could be upgraded to PackageReference from packages.config based project.
     // Only exception is this UI context doesn't get enabled for right-click on Reference since there is no extension point on references
@@ -189,7 +189,7 @@ namespace NuGetVSExtension
 
             await NuGetBrokeredServiceFactory.ProfferServicesAsync(this);
 
-            VsShellUtilities.ShutdownToken.Register(RegisterEmitVSInstancePowerShellTelemetry);
+            VsShellUtilities.ShutdownToken.Register(InstanceCloseTelemetryEmitter.OnShutdown);
 
             var componentModel = await this.GetFreeThreadedServiceAsync<SComponentModel, IComponentModel>();
             Assumes.Present(componentModel);
@@ -217,7 +217,7 @@ namespace NuGetVSExtension
 
                 Brushes.LoadVsBrushes(NuGetExperimentationService.Value);
 
-                _dte = await this.GetServiceAsync<SDTE, DTE>();
+                _dte = await this.GetDTEAsync();
                 Assumes.Present(_dte);
 
                 if (SolutionManager.Value.NuGetProjectContext == null)
@@ -514,7 +514,7 @@ namespace NuGetVSExtension
             if (nugetProject == null)
             {
                 throw new InvalidOperationException(
-                    string.Format(Resources.ProjectHasAnInvalidNuGetConfiguration, project.Name));
+                    string.Format(CultureInfo.CurrentCulture, Resources.ProjectHasAnInvalidNuGetConfiguration, project.Name));
             }
 
             // load packages.config. This makes sure that an exception will get thrown if there
@@ -1263,11 +1263,6 @@ namespace NuGetVSExtension
         }
 
         #endregion IVsPackageExtensionProvider implementation
-
-        private void RegisterEmitVSInstancePowerShellTelemetry()
-        {
-            NuGetPowerShellUsage.RaiseVSInstanceCloseEvent();
-        }
 
         #region IVsPersistSolutionOpts
 

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -119,15 +120,13 @@ namespace NuGet.PackageManagement
             {
                 var nuGetPackageManager = GetNuGetPackageManager(solutionDirectory);
 
-                foreach (var packageReference in packageReferencesDict.Keys)
+                foreach ((var packageReference, var projectNames) in packageReferencesDict)
                 {
                     var isMissing = false;
                     if (!nuGetPackageManager.PackageExistsInPackagesFolder(packageReference.PackageIdentity))
                     {
                         isMissing = true;
                     }
-
-                    var projectNames = packageReferencesDict[packageReference];
 
                     Debug.Assert(projectNames != null);
                     packages.Add(new PackageRestoreData(packageReference, projectNames, isMissing));
@@ -139,7 +138,7 @@ namespace NuGet.PackageManagement
 
         private async Task<Dictionary<PackageReference, List<string>>> GetPackagesReferencesDictionaryAsync(CancellationToken token)
         {
-            var packageReferencesDict = new Dictionary<PackageReference, List<string>>(new PackageReferenceComparer());
+            var packageReferencesDict = new Dictionary<PackageReference, List<string>>(PackageReferenceComparer.Instance);
             if (!await SolutionManager.IsSolutionAvailableAsync())
             {
                 return packageReferencesDict;
@@ -273,7 +272,7 @@ namespace NuGet.PackageManagement
                 token,
                 PackageRestoredEvent,
                 PackageRestoreFailedEvent,
-                sourceRepositories: null,
+                sourceRepositories: SourceRepositoryProvider.GetRepositories(),
                 maxNumberOfParallelTasks: PackageManagementConstants.DefaultMaxDegreeOfParallelism,
                 logger: NullLogger.Instance);
 
@@ -309,7 +308,7 @@ namespace NuGet.PackageManagement
                 token,
                 PackageRestoredEvent,
                 PackageRestoreFailedEvent,
-                sourceRepositories: null,
+                sourceRepositories: SourceRepositoryProvider.GetRepositories(),
                 maxNumberOfParallelTasks: PackageManagementConstants.DefaultMaxDegreeOfParallelism,
                 logger: logger);
 
@@ -371,11 +370,20 @@ namespace NuGet.PackageManagement
             // It is possible that the dictionary passed in may not have used the PackageReferenceComparer.
             // So, just to be sure, create a hashset with the keys from the dictionary using the PackageReferenceComparer
             // Now, we are guaranteed to not restore the same package more than once
-            var hashSetOfMissingPackageReferences = new HashSet<PackageReference>(missingPackages.Select(p => p.PackageReference), new PackageReferenceComparer());
+            var hashSetOfMissingPackageReferences = new HashSet<PackageReference>(missingPackages.Select(p => p.PackageReference), PackageReferenceComparer.Instance);
 
             nuGetProjectContext.PackageExtractionContext.CopySatelliteFiles = false;
 
             packageRestoreContext.Token.ThrowIfCancellationRequested();
+
+            foreach (SourceRepository enabledSource in packageRestoreContext.SourceRepositories)
+            {
+                PackageSource source = enabledSource.PackageSource;
+                if (source.IsHttp && !source.IsHttps)
+                {
+                    packageRestoreContext.Logger.Log(LogLevel.Warning, string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "restore", source.Source));
+                }
+            }
 
             var attemptedPackages = await ThrottledPackageRestoreAsync(
                 hashSetOfMissingPackageReferences,
@@ -512,7 +520,7 @@ namespace NuGet.PackageManagement
 
                 if (packageRestoreContext.PackageRestoreFailedEvent != null)
                 {
-                    var packageReferenceComparer = new PackageReferenceComparer();
+                    var packageReferenceComparer = PackageReferenceComparer.Instance;
 
                     var packageRestoreData = packageRestoreContext.Packages
                         .Where(p => packageReferenceComparer.Equals(p.PackageReference, packageReference))

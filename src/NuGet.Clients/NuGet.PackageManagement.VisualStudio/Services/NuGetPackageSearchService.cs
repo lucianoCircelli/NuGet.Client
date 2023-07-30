@@ -43,6 +43,12 @@ namespace NuGet.PackageManagement.VisualStudio
                 { "pollingInterval", "00:02:00" }
             });
 
+        private readonly static CacheItemPolicy CacheItemPolicy = new CacheItemPolicy
+        {
+            SlidingExpiration = ObjectCache.NoSlidingExpiration,
+            AbsoluteExpiration = ObjectCache.InfiniteAbsoluteExpiration,
+        };
+
         public NuGetPackageSearchService(ServiceActivationOptions options, IServiceBroker sb, AuthorizationServiceClient ac, ISharedServiceState state)
         {
             _options = options;
@@ -170,10 +176,65 @@ namespace NuGet.PackageManagement.VisualStudio
 
             IPackageMetadataProvider packageMetadataProvider = await GetPackageMetadataProviderAsync(packageSources, cancellationToken);
             IPackageSearchMetadata packageMetadata = await packageMetadataProvider.GetPackageMetadataAsync(identity, includePrerelease, cancellationToken);
-            IEnumerable<VersionInfo> versions = await packageMetadata.GetVersionsAsync();
 
-            return await Task.WhenAll(versions.Select(v => VersionInfoContextInfo.CreateAsync(v).AsTask()));
+            // Update the cache
+            var cacheEntry = new PackageSearchMetadataCacheItem(packageMetadata, packageMetadataProvider);
+            cacheEntry.UpdateSearchMetadata(packageMetadata);
+            PackageSearchMetadataMemoryCache.AddOrGetExisting(cacheId, cacheEntry, CacheItemPolicy);
+
+            return await cacheEntry.AllVersionsContextInfo;
         }
+
+        public async ValueTask<IReadOnlyCollection<VersionInfoContextInfo>> GetPackageVersionsAsync(
+            PackageIdentity identity,
+            IReadOnlyCollection<PackageSourceContextInfo> packageSources,
+            bool includePrerelease,
+            bool isTransitive,
+            CancellationToken cancellationToken)
+        {
+            return await GetPackageVersionsAsync(identity, packageSources, includePrerelease, isTransitive, projects: null, cancellationToken);
+        }
+
+        public async ValueTask<IReadOnlyCollection<VersionInfoContextInfo>> GetPackageVersionsAsync(
+            PackageIdentity identity,
+            IReadOnlyCollection<PackageSourceContextInfo> packageSources,
+            bool includePrerelease,
+            bool isTransitive,
+            IEnumerable<IProjectContextInfo>? projects,
+            CancellationToken cancellationToken)
+        {
+            Assumes.NotNull(identity);
+            Assumes.NotNullOrEmpty(packageSources);
+
+            string cacheId = PackageSearchMetadataCacheItem.GetCacheId(identity.Id, includePrerelease, packageSources);
+            PackageSearchMetadataCacheItem? backgroundDataCache = PackageSearchMetadataMemoryCache.Get(cacheId) as PackageSearchMetadataCacheItem;
+
+            // Transitive packages will have only one version the first time they are loaded, when the package is selected we update the cache with all the versions
+            if (backgroundDataCache != null)
+            {
+                // If the item was cached with search API, PackageSearchMetadata could be null. If so, update it with registration api information
+                if (isTransitive
+                    && !(backgroundDataCache.AllVersionsContextInfo.Result?.Count > 1)
+                    || backgroundDataCache.AllVersionsContextInfo.Result?.First().PackageSearchMetadata == null)
+                {
+                    IPackageMetadataProvider newPackageMetadataProvider = await GetPackageMetadataProviderAsync(packageSources, projects?.ToList().AsReadOnly(), cancellationToken);
+                    IPackageSearchMetadata newPackageMetadata = await newPackageMetadataProvider.GetPackageMetadataAsync(identity, includePrerelease, cancellationToken);
+                    backgroundDataCache.UpdateSearchMetadata(newPackageMetadata);
+                }
+                return await backgroundDataCache.AllVersionsContextInfo;
+            }
+
+            IPackageMetadataProvider packageMetadataProvider = await GetPackageMetadataProviderAsync(packageSources, projects?.ToList().AsReadOnly(), cancellationToken);
+            IPackageSearchMetadata packageMetadata = await packageMetadataProvider.GetPackageMetadataAsync(identity, includePrerelease, cancellationToken);
+
+            // Update the cache
+            var cacheEntry = new PackageSearchMetadataCacheItem(packageMetadata, packageMetadataProvider);
+            cacheEntry.UpdateSearchMetadata(packageMetadata);
+            PackageSearchMetadataMemoryCache.AddOrGetExisting(cacheId, cacheEntry, CacheItemPolicy);
+
+            return await cacheEntry.AllVersionsContextInfo;
+        }
+
 
         public async ValueTask<PackageDeprecationMetadataContextInfo?> GetDeprecationMetadataAsync(
             PackageIdentity identity,
@@ -291,9 +352,26 @@ namespace NuGet.PackageManagement.VisualStudio
             IReadOnlyCollection<PackageSourceContextInfo> packageSources,
             CancellationToken cancellationToken)
         {
+            return await GetPackageMetadataProviderAsync(packageSources, projects: null, cancellationToken);
+        }
+
+        private async ValueTask<IPackageMetadataProvider> GetPackageMetadataProviderAsync(
+            IReadOnlyCollection<PackageSourceContextInfo> packageSources,
+            IReadOnlyCollection<IProjectContextInfo>? projects,
+            CancellationToken cancellationToken)
+        {
             IReadOnlyCollection<SourceRepository> sourceRepositories = await _sharedServiceState.GetRepositoriesAsync(packageSources, cancellationToken);
             SourceRepository localRepo = await _packagesFolderLocalRepositoryLazy.GetValueAsync(cancellationToken);
-            IEnumerable<SourceRepository> globalRepo = await _globalPackageFolderRepositoriesLazy.GetValueAsync(cancellationToken);
+            IEnumerable<SourceRepository> globalRepo;
+            if (projects != null)
+            {
+                globalRepo = await GetAllPackageFoldersAsync(projects, cancellationToken);
+            }
+            else
+            {
+                globalRepo = await _globalPackageFolderRepositoriesLazy.GetValueAsync(cancellationToken);
+            }
+
             return new MultiSourcePackageMetadataProvider(sourceRepositories, localRepo, globalRepo, new VisualStudioActivityLogger());
         }
 
@@ -305,10 +383,10 @@ namespace NuGet.PackageManagement.VisualStudio
             return packageReferences.SelectMany(e => e).ToList();
         }
 
-        private async ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(IReadOnlyCollection<IProjectContextInfo> projectContextInfos, CancellationToken cancellationToken)
+        private async ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(IReadOnlyCollection<IProjectContextInfo> projectContextInfos, bool includeTransitiveOrigins, CancellationToken cancellationToken)
         {
             IEnumerable<Task<IInstalledAndTransitivePackages>> tasks = projectContextInfos
-                .Select(project => project.GetInstalledAndTransitivePackagesAsync(_serviceBroker, cancellationToken).AsTask());
+                .Select(project => project.GetInstalledAndTransitivePackagesAsync(_serviceBroker, includeTransitiveOrigins, cancellationToken).AsTask());
             IInstalledAndTransitivePackages[] installedAndTransitivePackagesArray = await Task.WhenAll(tasks);
             if (installedAndTransitivePackagesArray.Length == 1)
             {
@@ -378,11 +456,6 @@ namespace NuGet.PackageManagement.VisualStudio
                 return packageFeeds;
             }
 
-            IInstalledAndTransitivePackages installedAndTransitivePackages = await GetInstalledAndTransitivePackagesAsync(projectContextInfos, cancellationToken);
-
-            PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(installedAndTransitivePackages.InstalledPackages);
-            PackageCollection transitivePackageCollection = PackageCollection.FromPackageReferences(installedAndTransitivePackages.TransitivePackages);
-
             IEnumerable<SourceRepository> globalPackageFolderRepositories = await GetAllPackageFoldersAsync(projectContextInfos, cancellationToken);
             SourceRepository packagesFolderSourceRepository = await _packagesFolderLocalRepositoryLazy.GetValueAsync(cancellationToken);
             var metadataProvider = new MultiSourcePackageMetadataProvider(
@@ -393,27 +466,60 @@ namespace NuGet.PackageManagement.VisualStudio
 
             if (itemFilter == ItemFilter.All)
             {
+                // Browse Tab, Project or Solution View: no need of transitive origins data.
+                IInstalledAndTransitivePackages browseTabPackages = await GetInstalledAndTransitivePackagesAsync(projectContextInfos, includeTransitiveOrigins: false, cancellationToken);
+                PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(browseTabPackages.InstalledPackages);
+                PackageCollection transitivePackageCollection = PackageCollection.FromPackageReferences(browseTabPackages.TransitivePackages);
+
                 // if we get here, recommendPackages == true
                 packageFeeds.mainFeed = new MultiSourcePackageFeed(sourceRepositories, uiLogger, TelemetryActivity.NuGetTelemetryService);
-                packageFeeds.recommenderFeed = new RecommenderPackageFeed(
-                    sourceRepositories,
-                    installedPackageCollection,
-                    transitivePackageCollection,
-                    targetFrameworks,
-                    metadataProvider,
-                    logger);
+                try
+                {
+                    // Recommender needs installed and transitive package lists, but it does not need transitive origins data.
+                    packageFeeds.recommenderFeed = new RecommenderPackageFeed(
+                        sourceRepositories,
+                        installedPackageCollection,
+                        transitivePackageCollection,
+                        targetFrameworks,
+                        metadataProvider,
+                        logger);
+                }
+                catch (System.IO.FileNotFoundException)
+                {
+                    // This could happen if the user disables the recommender extension. Catching this
+                    // exception allows the package manager to continue without recommendations.
+                }
                 return packageFeeds;
             }
 
             if (itemFilter == ItemFilter.Installed)
             {
-                if (!isSolution && await ExperimentUtility.IsTransitiveOriginExpEnabled.GetValueAsync(cancellationToken))
+                if (isSolution)
                 {
-                    packageFeeds.mainFeed = new InstalledAndTransitivePackageFeed(installedPackageCollection, transitivePackageCollection, metadataProvider);
-                }
-                else
-                {
+                    // Installed Tab, Solution View: only needs installed packages.
+                    IReadOnlyCollection<IPackageReferenceContextInfo> installedSolutionTabPackages = await GetAllInstalledPackagesAsync(projectContextInfos, cancellationToken);
+                    PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(installedSolutionTabPackages);
                     packageFeeds.mainFeed = new InstalledPackageFeed(installedPackageCollection, metadataProvider);
+                }
+                else // is Project
+                {
+                    CounterfactualLoggers.PMUITransitiveDependencies.EmitIfNeeded();
+                    if (await ExperimentUtility.IsTransitiveOriginExpEnabled.GetValueAsync(cancellationToken))
+                    {
+                        // Installed Tab, Project View, Experiment On: needs installed, transitive packages and transitive origins data
+                        IInstalledAndTransitivePackages installedTabWithTransitiveOrigins = await GetInstalledAndTransitivePackagesAsync(projectContextInfos, includeTransitiveOrigins: true, cancellationToken);
+                        PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(installedTabWithTransitiveOrigins.InstalledPackages);
+                        PackageCollection transitivePackageCollection = PackageCollection.FromPackageReferences(installedTabWithTransitiveOrigins.TransitivePackages);
+
+                        packageFeeds.mainFeed = new InstalledAndTransitivePackageFeed(installedPackageCollection, transitivePackageCollection, metadataProvider);
+                    }
+                    else
+                    {
+                        // Installed Tab, Project View, Experiment Off: only needs installed packages
+                        IReadOnlyCollection<IPackageReferenceContextInfo> installedTabPackages = await GetAllInstalledPackagesAsync(projectContextInfos, cancellationToken);
+                        PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(installedTabPackages);
+                        packageFeeds.mainFeed = new InstalledPackageFeed(installedPackageCollection, metadataProvider);
+                    }
                 }
 
                 return packageFeeds;
@@ -421,6 +527,10 @@ namespace NuGet.PackageManagement.VisualStudio
 
             if (itemFilter == ItemFilter.Consolidate)
             {
+                // Consolidate tab, Solution View only: only needs installed packages
+                IReadOnlyCollection<IPackageReferenceContextInfo> installedTabPackages = await GetAllInstalledPackagesAsync(projectContextInfos, cancellationToken);
+                PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(installedTabPackages);
+
                 packageFeeds.mainFeed = new ConsolidatePackageFeed(installedPackageCollection, metadataProvider, logger);
                 return packageFeeds;
             }
@@ -433,6 +543,10 @@ namespace NuGet.PackageManagement.VisualStudio
 
             if (itemFilter == ItemFilter.UpdatesAvailable)
             {
+                // Updates tab, Project or Solution View: only needs installed packages
+                IReadOnlyCollection<IPackageReferenceContextInfo> updatedTabPackages = await GetAllInstalledPackagesAsync(projectContextInfos, cancellationToken);
+                PackageCollection installedPackageCollection = PackageCollection.FromPackageReferences(updatedTabPackages);
+
                 packageFeeds.mainFeed = new UpdatePackageFeed(
                     _serviceBroker,
                     installedPackageCollection,

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+echo "git config --global protocol.file.allow always"
+git config --global protocol.file.allow always
+
 source="${BASH_SOURCE[0]}"
 scriptroot="$( cd -P "$( dirname "$source" )" && pwd )"
 
@@ -80,4 +83,9 @@ fi
 
 ReadGlobalVersion Microsoft.DotNet.Arcade.Sdk
 export ARCADE_VERSION=$_ReadGlobalVersion
+
+if [ -z "$DotNetBuildFromSourceFlavor" ] || [ "$DotNetBuildFromSourceFlavor" != "Product" ]; then
+  export NUGET_PACKAGES=$scriptroot/../../artifacts/source-build/self/package-cache/
+fi
+
 "$DOTNET" msbuild "$scriptroot/source-build.proj" /p:Configuration=$configuration /p:DotNetBuildFromSource=true /p:ArcadeBuildFromSource=true "/p:RepoRoot=$scriptroot/../../" "/bl:$scriptroot/../../artifacts/source-build/self/log/source-build.binlog" $args

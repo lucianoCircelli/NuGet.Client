@@ -4,6 +4,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace NuGet.Common
 {
@@ -18,6 +19,43 @@ namespace NuGet.Common
 #endif
 
         private static readonly Lazy<string> _getHome = new Lazy<string>(() => GetHome());
+
+        private static string _nuGetTempDirectory = null;
+        internal static string NuGetTempDirectory
+        {
+            get { return _nuGetTempDirectory ??= GetNuGetTempDirectory(); }
+        }
+
+        private static string GetNuGetTempDirectory()
+        {
+            var nuGetScratch = Environment.GetEnvironmentVariable("NUGET_SCRATCH");
+            if (string.IsNullOrEmpty(nuGetScratch))
+            {
+#pragma warning disable RS0030 // Do not used banned APIs
+                // This is the only place in the product code we can use GetTempPath().
+                var tempPath = Path.GetTempPath();
+#pragma warning restore RS0030 // Do not used banned APIs
+
+                // On Windows and Mac the temp directories are per-user, but on Linux it's /tmp for everyone, so append the username on Linux.
+                nuGetScratch = Path.Combine(tempPath,
+                    RuntimeEnvironmentHelper.IsLinux ? "NuGetScratch" + Environment.UserName : "NuGetScratch");
+
+                if (RuntimeEnvironmentHelper.IsLinux)
+                {
+                    Directory.CreateDirectory(nuGetScratch);
+                    if (chmod(nuGetScratch, 0b111_000_000) != 0)   //0b111_000_000 = 700 permissions
+                    {
+                        // Another user created a folder pretending to be us! 
+                        var errno = Marshal.GetLastWin32Error(); // fetch the errno before running any other operation
+                        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture,
+                            Strings.UnableToSetNuGetTempFolderPermission,
+                            nuGetScratch,
+                            errno));
+                    }
+                }
+            }
+            return nuGetScratch;
+        }
 
         public static string GetFolderPath(NuGetFolderPath folder)
         {
@@ -57,16 +95,36 @@ namespace NuGet.Common
                         ".nuget");
 
                 case NuGetFolderPath.HttpCacheDirectory:
-                    return Path.Combine(
-                        GetFolderPath(SpecialFolder.LocalApplicationData),
-                        "NuGet",
-                        "v3-cache");
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        return Path.Combine(
+                            GetFolderPath(SpecialFolder.LocalApplicationData),
+                            "NuGet",
+                            "v3-cache");
+                    }
+                    else
+                    {
+                        return Path.Combine(
+                            GetFolderPath(SpecialFolder.LocalApplicationData),
+                            "NuGet",
+                            "http-cache");
+                    }
 
                 case NuGetFolderPath.NuGetPluginsCacheDirectory:
-                    return Path.Combine(
-                        GetFolderPath(SpecialFolder.LocalApplicationData),
-                        "NuGet",
-                        "plugins-cache");
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        return Path.Combine(
+                            GetFolderPath(SpecialFolder.LocalApplicationData),
+                            "NuGet",
+                            "plugins-cache");
+                    }
+                    else
+                    {
+                        return Path.Combine(
+                            GetFolderPath(SpecialFolder.LocalApplicationData),
+                            "NuGet",
+                            "plugin-cache");
+                    }
 
                 case NuGetFolderPath.DefaultMsBuildPath:
                     var programFilesPath = GetFolderPath(SpecialFolder.ProgramFilesX86);
@@ -80,12 +138,7 @@ namespace NuGet.Common
 
                 case NuGetFolderPath.Temp:
                     {
-                        var nuGetScratch = Environment.GetEnvironmentVariable("NUGET_SCRATCH");
-                        if (string.IsNullOrEmpty(nuGetScratch))
-                        {
-                            nuGetScratch = Path.Combine(Path.GetTempPath(), "NuGetScratch");
-                        }
-                        return nuGetScratch;
+                        return NuGetTempDirectory;
                     }
 
                 default:
@@ -93,9 +146,14 @@ namespace NuGet.Common
             }
         }
 
+        /// <summary>Only to be used for setting permissions of directories under /tmp on Linux. Do not use elsewhere.</summary>
+        [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
+        private static extern int chmod(string pathname, int mode);
+
+
 #if IS_CORECLR
 
-        private static string GetFolderPath(SpecialFolder folder)
+        internal static string GetFolderPath(SpecialFolder folder)
         {
             switch (folder)
             {
@@ -174,7 +232,7 @@ namespace NuGet.Common
 
 #else
 
-        private static string GetFolderPath(SpecialFolder folder)
+        internal static string GetFolderPath(SpecialFolder folder)
         {
             // Convert the private enum to the .NET Framework enum
             Environment.SpecialFolder converted;
@@ -345,7 +403,7 @@ namespace NuGet.Common
         /// make our own and re-implement the functionality. On .NET Framework, we can use the
         /// built-in functionality.
         /// </summary>
-        private enum SpecialFolder
+        internal enum SpecialFolder
         {
             ProgramFilesX86,
             ProgramFiles,

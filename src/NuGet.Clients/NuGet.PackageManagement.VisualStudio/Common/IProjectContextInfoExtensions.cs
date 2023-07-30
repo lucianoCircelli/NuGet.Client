@@ -12,6 +12,8 @@ using Microsoft.ServiceHub.Framework;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
 using NuGet.VisualStudio.Internal.Contracts;
+using NuGet.ProjectManagement.Projects;
+using System.Linq;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -56,6 +58,12 @@ namespace NuGet.PackageManagement.VisualStudio
         public static async ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(
             this IProjectContextInfo projectContextInfo,
             IServiceBroker serviceBroker,
+            CancellationToken cancellationToken) => await GetInstalledAndTransitivePackagesAsync(projectContextInfo, serviceBroker, includeTransitiveOrigins: false, cancellationToken);
+
+        public static async ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(
+            this IProjectContextInfo projectContextInfo,
+            IServiceBroker serviceBroker,
+            bool includeTransitiveOrigins,
             CancellationToken cancellationToken)
         {
             Assumes.NotNull(projectContextInfo);
@@ -63,10 +71,13 @@ namespace NuGet.PackageManagement.VisualStudio
 
             cancellationToken.ThrowIfCancellationRequested();
 
+            IInstalledAndTransitivePackages projectPackages;
             using (INuGetProjectManagerService projectManager = await GetProjectManagerAsync(serviceBroker, cancellationToken))
             {
-                return await projectManager.GetInstalledAndTransitivePackagesAsync(new string[] { projectContextInfo.ProjectId }, cancellationToken);
+                projectPackages = await projectManager.GetInstalledAndTransitivePackagesAsync(new string[] { projectContextInfo.ProjectId }, includeTransitiveOrigins, cancellationToken);
             }
+
+            return projectPackages;
         }
 
         /// <summary>
@@ -111,6 +122,21 @@ namespace NuGet.PackageManagement.VisualStudio
             using (INuGetProjectManagerService projectManager = await GetProjectManagerAsync(serviceBroker, cancellationToken))
             {
                 return await projectManager.GetTargetFrameworksAsync(new string[] { projectContextInfo.ProjectId }, cancellationToken);
+            }
+        }
+
+        public static async ValueTask<bool> IsCentralPackageManagementEnabledAsync(this IProjectContextInfo projectContextInfo,
+            IServiceBroker serviceBroker,
+            CancellationToken cancellationToken)
+        {
+            Assumes.NotNull(projectContextInfo);
+            Assumes.NotNull(serviceBroker);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using (INuGetProjectManagerService projectManager = await GetProjectManagerAsync(serviceBroker, cancellationToken))
+            {
+                return await projectManager.IsCentralPackageManagementEnabledAsync(projectContextInfo.ProjectId, cancellationToken);
             }
         }
 

@@ -51,11 +51,30 @@ namespace NuGet.ProjectModel
                 versionStr == null ? null : VersionRange.Parse(versionStr));
         }
 
+        internal static JProperty WritePackageDependencyWithLegacyString(PackageDependency item)
+        {
+            return new JProperty(
+                item.Id,
+                WriteString(item.VersionRange?.ToNonSnapshotRange().ToLegacyShortString()));
+        }
+
+        internal static void WritePackageDependencyWithLegacyString(JsonWriter writer, PackageDependency item)
+        {
+            writer.WritePropertyName(item.Id);
+            writer.WriteValue(item.VersionRange?.ToNonSnapshotRange().ToLegacyShortString());
+        }
+
         internal static JProperty WritePackageDependency(PackageDependency item)
         {
             return new JProperty(
                 item.Id,
-                WriteString(item.VersionRange?.ToLegacyShortString()));
+                WriteString(item.VersionRange?.ToString()));
+        }
+
+        internal static void WritePackageDependency(JsonWriter writer, PackageDependency item)
+        {
+            writer.WritePropertyName(item.Id);
+            writer.WriteValue(item.VersionRange?.ToString());
         }
 
         internal static TItem ReadProperty<TItem>(JObject jObject, string propertyName)
@@ -94,6 +113,18 @@ namespace NuGet.ProjectModel
                 array.Add(writeItem(item));
             }
             return array;
+        }
+
+        internal static void WriteObject<TItem>(JsonWriter writer, IEnumerable<TItem> items, Action<JsonWriter, TItem> writeItem)
+        {
+            writer.WriteStartObject();
+
+            foreach (var item in items)
+            {
+                writeItem(writer, item);
+            }
+
+            writer.WriteEndObject();
         }
 
         internal static int ReadInt(JToken cursor, string property, int defaultValue)

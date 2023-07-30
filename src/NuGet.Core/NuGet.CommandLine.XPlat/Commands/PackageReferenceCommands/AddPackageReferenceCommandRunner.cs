@@ -57,7 +57,7 @@ namespace NuGet.CommandLine.XPlat
                         typeConstraint: LibraryDependencyTarget.Package)
                 };
 
-                msBuild.AddPackageReference(packageReferenceArgs.ProjectPath, libraryDependency);
+                msBuild.AddPackageReference(packageReferenceArgs.ProjectPath, libraryDependency, packageReferenceArgs.NoVersion);
                 return 0;
             }
 
@@ -101,6 +101,12 @@ namespace NuGet.CommandLine.XPlat
             }
 
             var originalPackageSpec = matchingPackageSpecs.FirstOrDefault();
+
+            // Check if the project files are correct for CPM
+            if (originalPackageSpec.RestoreMetadata.CentralPackageVersionsEnabled && !msBuild.AreCentralVersionRequirementsSatisfied(packageReferenceArgs, originalPackageSpec))
+            {
+                return 1;
+            }
 
             // 2. Determine the version
 
@@ -180,14 +186,14 @@ namespace NuGet.CommandLine.XPlat
                 .Result
                 .CompatibilityCheckResults
                 .Where(t => t.Success)
-                .Select(t => t.Graph.Framework), new NuGetFrameworkFullComparer());
+                .Select(t => t.Graph.Framework), NuGetFrameworkFullComparer.Instance);
 
             if (packageReferenceArgs.Frameworks?.Any() == true)
             {
                 // If the user has specified frameworks then we intersect that with the compatible frameworks.
                 var userSpecifiedFrameworkSet = new HashSet<NuGetFramework>(
                     userSpecifiedFrameworks,
-                    new NuGetFrameworkFullComparer());
+                    NuGetFrameworkFullComparer.Instance);
 
                 compatibleFrameworks.IntersectWith(userSpecifiedFrameworkSet);
             }
@@ -219,7 +225,7 @@ namespace NuGet.CommandLine.XPlat
                 // generate a library dependency with all the metadata like Include, Exlude and SuppressParent
                 var libraryDependency = GenerateLibraryDependency(updatedPackageSpec, packageReferenceArgs, restorePreviewResult, userSpecifiedFrameworks, packageDependency);
 
-                msBuild.AddPackageReference(packageReferenceArgs.ProjectPath, libraryDependency);
+                msBuild.AddPackageReference(packageReferenceArgs.ProjectPath, libraryDependency, packageReferenceArgs.NoVersion);
             }
             else
             {
@@ -239,7 +245,8 @@ namespace NuGet.CommandLine.XPlat
 
                 msBuild.AddPackageReferencePerTFM(packageReferenceArgs.ProjectPath,
                     libraryDependency,
-                    compatibleOriginalFrameworks);
+                    compatibleOriginalFrameworks,
+                    packageReferenceArgs.NoVersion);
             }
 
             // 6. Commit restore result
@@ -275,6 +282,9 @@ namespace NuGet.CommandLine.XPlat
 
             // update default packages path if user specified custom package directory
             var packagesPath = project.RestoreMetadata.PackagesPath;
+
+            // get if the project is onboarded to CPM
+            var isCentralPackageManagementEnabled = project.RestoreMetadata.CentralPackageVersionsEnabled;
 
             if (!string.IsNullOrEmpty(packageReferenceArgs.PackageDirectory))
             {
@@ -314,6 +324,7 @@ namespace NuGet.CommandLine.XPlat
                     if (dependency != null)
                     {
                         dependency.LibraryRange.VersionRange = version;
+                        dependency.VersionCentrallyManaged = isCentralPackageManagementEnabled;
                         return dependency;
                     }
                 }
@@ -324,7 +335,8 @@ namespace NuGet.CommandLine.XPlat
                 LibraryRange = new LibraryRange(
                     name: packageReferenceArgs.PackageId,
                     versionRange: version,
-                    typeConstraint: LibraryDependencyTarget.Package)
+                    typeConstraint: LibraryDependencyTarget.Package),
+                VersionCentrallyManaged = isCentralPackageManagementEnabled
             };
         }
 
@@ -394,7 +406,7 @@ namespace NuGet.CommandLine.XPlat
                 // If the user specified frameworks then we get the flattened graphs  only from the compatible frameworks.
                 var userSpecifiedFrameworkSet = new HashSet<NuGetFramework>(
                     UserSpecifiedFrameworks,
-                    new NuGetFrameworkFullComparer());
+                    NuGetFrameworkFullComparer.Instance);
 
                 restoreGraphs = restoreGraphs
                     .Where(r => userSpecifiedFrameworkSet.Contains(r.Framework));

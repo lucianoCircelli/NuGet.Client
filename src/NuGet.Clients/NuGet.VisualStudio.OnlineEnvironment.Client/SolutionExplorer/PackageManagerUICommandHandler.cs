@@ -13,7 +13,6 @@ using EnvDTE;
 using Microsoft;
 using Microsoft.ServiceHub.Framework;
 using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Threading;
@@ -165,7 +164,7 @@ namespace NuGet.VisualStudio.OnlineEnvironment.Client
 
             Brushes.LoadVsBrushes(experimentationService);
 
-            _dte = await _asyncServiceProvider.GetServiceAsync<SDTE, DTE>();
+            _dte = await _asyncServiceProvider.GetDTEAsync();
             Assumes.Present(_dte);
 
             _dteEvents = _dte.Events.DTEEvents;

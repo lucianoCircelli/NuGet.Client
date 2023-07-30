@@ -15,6 +15,7 @@ using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Credentials;
+using NuGet.Packaging.Signing;
 using NuGet.ProjectModel;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
@@ -25,11 +26,11 @@ using System.Xml;
 using System.Xml.Linq;
 using NuGet.Packaging;
 using NuGet.Packaging.PackageExtraction;
-using NuGet.Packaging.Signing;
 using NuGet.PackageManagement;
 using NuGet.ProjectManagement;
 using NuGet.Shared;
 using static NuGet.Shared.XmlUtility;
+using System.Globalization;
 #endif
 
 namespace NuGet.Build.Tasks
@@ -191,6 +192,8 @@ namespace NuGet.Build.Tasks
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("NuGet Desktop MSBuild Task"));
 #endif
 
+                X509TrustStore.InitializeForDotNetSdk(log);
+
                 var restoreSummaries = new List<RestoreSummary>();
                 var providerCache = new RestoreCommandProvidersCache();
 
@@ -203,8 +206,9 @@ namespace NuGet.Build.Tasks
                     if (restoreSummaries.Count < 1)
                     {
                         var message = string.Format(
-                               Strings.InstallCommandNothingToInstall,
-                               "packages.config"
+                            CultureInfo.CurrentCulture,
+                            Strings.InstallCommandNothingToInstall,
+                            NuGetConstants.PackageReferenceFile
                         );
 
                         log.LogMinimal(message);
@@ -421,23 +425,9 @@ namespace NuGet.Build.Tasks
                 throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectName));
             }
 
-            packagesConfigPath = Path.Combine(projectDirectory, NuGetConstants.PackageReferenceFile);
+            packagesConfigPath = GetPackagesConfigFilePath(projectDirectory, projectName);
 
-            if (File.Exists(packagesConfigPath))
-            {
-                return true;
-            }
-
-            packagesConfigPath = Path.Combine(projectDirectory, $"packages.{projectName}.config");
-
-            if (File.Exists(packagesConfigPath))
-            {
-                return true;
-            }
-
-            packagesConfigPath = null;
-
-            return false;
+            return packagesConfigPath != null;
         }
 
 #if IS_DESKTOP
@@ -448,7 +438,7 @@ namespace NuGet.Build.Tasks
             string firstPackagesConfigPath = null;
             IList<PackageSource> packageSources = null;
 
-            var installedPackageReferences = new HashSet<Packaging.PackageReference>(new PackageReferenceComparer());
+            var installedPackageReferences = new HashSet<Packaging.PackageReference>(PackageReferenceComparer.Instance);
 
             ISettings settings = null;
 
@@ -474,7 +464,7 @@ namespace NuGet.Build.Tasks
 
                 settings = settings ?? Settings.LoadSettingsGivenConfigPaths(pcRestoreMetadata.ConfigFilePaths);
 
-                var packagesConfigPath = Path.Combine(Path.GetDirectoryName(pcRestoreMetadata.ProjectPath), NuGetConstants.PackageReferenceFile);
+                string packagesConfigPath = GetPackagesConfigFilePath(pcRestoreMetadata.ProjectPath);
 
                 firstPackagesConfigPath = firstPackagesConfigPath ?? packagesConfigPath;
 
@@ -602,6 +592,7 @@ namespace NuGet.Build.Tasks
                     else
                     {
                         string message = string.Format(
+                            CultureInfo.CurrentCulture,
                             Strings.Warning_InvalidPackageSaveMode,
                             v);
 
@@ -630,9 +621,10 @@ namespace NuGet.Build.Tasks
                 catch (XmlException ex)
                 {
                     var message = string.Format(
-                       Strings.Error_PackagesConfigParseError,
-                       projectConfigFilePath,
-                       ex.Message);
+                        CultureInfo.CurrentCulture,
+                        Strings.Error_PackagesConfigParseError,
+                        projectConfigFilePath,
+                        ex.Message);
 
                     throw new XmlException(message, ex);
                 }
@@ -727,6 +719,58 @@ namespace NuGet.Build.Tasks
             var additionalAbsolute = additional.Select(e => UriUtility.GetAbsolutePath(projectDirectory, e));
 
             return current.Concat(additionalAbsolute).ToArray();
+        }
+
+        /// <summary>
+        /// Gets the path to a packages.config for the specified project if one exists.
+        /// </summary>
+        /// <param name="projectFullPath">The full path to the project.</param>
+        /// <returns>The path to the packages.config file if one exists, otherwise <c>null</c>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="projectFullPath" /> is <c>null</c>.</exception>
+        public static string GetPackagesConfigFilePath(string projectFullPath)
+        {
+            if (string.IsNullOrWhiteSpace(projectFullPath))
+            {
+                throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectFullPath));
+            }
+
+            return GetPackagesConfigFilePath(Path.GetDirectoryName(projectFullPath), Path.GetFileNameWithoutExtension(projectFullPath));
+        }
+
+        /// <summary>
+        /// Gets the path to a packages.config for the specified project if one exists.
+        /// </summary>
+        /// <param name="projectFullPath">The full path to the project directory.</param>
+        /// <param name="projectName">The name of the project file.</param>
+        /// <returns>The path to the packages.config file if one exists, otherwise <c>null</c>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="projectDirectory" /> -or- <paramref name="projectName" /> is <c>null</c>.</exception>
+        public static string GetPackagesConfigFilePath(string projectDirectory, string projectName)
+        {
+            if (string.IsNullOrWhiteSpace(projectDirectory))
+            {
+                throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectDirectory));
+            }
+
+            if (string.IsNullOrWhiteSpace(projectName))
+            {
+                throw new ArgumentException(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(projectName));
+            }
+
+            string packagesConfigPath = Path.Combine(projectDirectory, NuGetConstants.PackageReferenceFile);
+
+            if (File.Exists(packagesConfigPath))
+            {
+                return packagesConfigPath;
+            }
+
+            packagesConfigPath = Path.Combine(projectDirectory, "packages." + projectName + ".config");
+
+            if (File.Exists(packagesConfigPath))
+            {
+                return packagesConfigPath;
+            }
+
+            return null;
         }
     }
 }

@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft;
-using NuGet.PackageManagement.UI;
 
-namespace NuGet.Options
+namespace NuGet.PackageManagement.UI.Options
 {
     internal class CheckedListBoxItemAccessibleObject : AccessibleObject
     {
@@ -116,7 +116,7 @@ namespace NuGet.Options
         {
             get
             {
-                return ParentCheckedListBox.GetItemChecked(_index).ToString();
+                return ParentCheckedListBox.GetItemChecked(_index).ToString(CultureInfo.CurrentCulture);
             }
         }
 

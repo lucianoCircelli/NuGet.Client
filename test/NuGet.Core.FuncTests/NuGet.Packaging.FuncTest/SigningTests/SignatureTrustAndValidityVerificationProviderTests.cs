@@ -25,6 +25,8 @@ using HashAlgorithmName = NuGet.Common.HashAlgorithmName;
 
 namespace NuGet.Packaging.FuncTest
 {
+    using X509StorePurpose = global::Test.Utility.Signing.X509StorePurpose;
+
     [Collection(SigningTestCollection.Name)]
     public class SignatureTrustAndValidityVerificationProviderTests
     {
@@ -356,7 +358,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInAcceptMode_DoesNotWarnAsync()
         {
             // Arrange
@@ -372,7 +374,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Empty(matchingIssues);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInRequireMode_WarnsAsync()
         {
             // Arrange
@@ -398,7 +400,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInVerify_WarnsAsync()
         {
             // Act & Assert
@@ -421,7 +423,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationAndAllowIllegal_WarnsAsync()
         {
             // Arrange
@@ -449,7 +451,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Empty(matchingIssues);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationAndAllowUnknownRevocation_WithOnlineRevocationMode_WarnsAsync()
         {
             // Arrange
@@ -487,7 +489,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationAndAllowUnknownRevocation_WithOfflineRevocationMode_WarnsAsync()
         {
             // Arrange
@@ -520,7 +522,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Information, NuGetLogCode.Undefined);
         }
 
-        [CIOnlyFact(Skip = "https://github.com/NuGet/Client.Engineering/issues/1484")]
+        [CIOnlyFact(Skip = "https://github.com/NuGet/Home/issues/12186")]
         public async Task GetTrustResultAsync_WithTrustedButExpiredPrimaryAndTimestampCertificates_WithUnavailableRevocationInformationAndAllowUnknownRevocation_WarnsAsync()
         {
             List<SignatureLog> matchingIssues = await VerifyUnavailableRevocationInfoAsync(
@@ -1953,7 +1955,7 @@ namespace NuGet.Packaging.FuncTest
         {
             using (IX509CertificateChain certificateChain = SignatureUtility.GetCertificateChain(signature))
             {
-                return TrustRootCertificate(certificateChain);
+                return TrustRootCertificate(certificateChain, X509StorePurpose.CodeSigning);
             }
         }
 
@@ -1968,17 +1970,18 @@ namespace NuGet.Packaging.FuncTest
 
             using (IX509CertificateChain certificateChain = SignatureUtility.GetTimestampCertificateChain(signature))
             {
-                return TrustRootCertificate(certificateChain);
+                return TrustRootCertificate(certificateChain, X509StorePurpose.Timestamping);
             }
         }
 
-        private static IDisposable TrustRootCertificate(IX509CertificateChain certificateChain)
+        private static IDisposable TrustRootCertificate(IX509CertificateChain certificateChain, X509StorePurpose storePurpose)
         {
             X509Certificate2 rootCertificate = certificateChain.Last();
             StoreLocation storeLocation = CertificateStoreUtilities.GetTrustedCertificateStoreLocation();
 
             return TrustedTestCert.Create(
                 new X509Certificate2(rootCertificate),
+                storePurpose,
                 StoreName.Root,
                 storeLocation,
                 maximumValidityPeriod: TimeSpan.MaxValue);

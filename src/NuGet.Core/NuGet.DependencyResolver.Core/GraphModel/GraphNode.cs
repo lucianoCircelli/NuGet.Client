@@ -1,9 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Collections.Concurrent;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.LibraryModel;
 
 namespace NuGet.DependencyResolver
@@ -11,13 +10,21 @@ namespace NuGet.DependencyResolver
     public class GraphNode<TItem>
     {
         public GraphNode(LibraryRange key)
+            : this(key, hasInnerNodes: true, hasParentNodes: true)
         {
-            Key = key;
-            InnerNodes = new List<GraphNode<TItem>>();
-            Disposition = Disposition.Acceptable;
-            ParentNodes = new List<GraphNode<TItem>>();
         }
 
+        internal GraphNode(LibraryRange key, bool hasInnerNodes, bool hasParentNodes)
+        {
+            Key = key;
+            Disposition = Disposition.Acceptable;
+
+            InnerNodes = hasInnerNodes ? new List<GraphNode<TItem>>() : EmptyList;
+            ParentNodes = hasParentNodes ? new List<GraphNode<TItem>>() : EmptyList;
+        }
+
+        //All empty ParentNodes and InnerNodes point to this EmptyList, to reduce the memory allocation for empty ParentNodes and InnerNodes
+        internal static readonly IList<GraphNode<TItem>> EmptyList = Array.Empty<GraphNode<TItem>>();
         public LibraryRange Key { get; set; }
         public GraphItem<TItem> Item { get; set; }
         public GraphNode<TItem> OuterNode { get; set; }
@@ -27,7 +34,7 @@ namespace NuGet.DependencyResolver
         /// <summary>
         /// Used in case that a node is removed from its outernode and needs to keep reference of its parents.
         /// </summary>
-        internal IList<GraphNode<TItem>> ParentNodes { get; }
+        public IList<GraphNode<TItem>> ParentNodes { get; }
 
         internal bool AreAllParentsRejected()
         {

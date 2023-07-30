@@ -1,13 +1,8 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.Versioning;
 using System.Text;
-using System.Threading.Tasks;
 using NuGet.Client;
 using NuGet.Common;
 using NuGet.ContentModel;
@@ -34,7 +29,7 @@ namespace NuGet.Packaging.Rules
 
         internal IEnumerable<PackagingLogMessage> Validate(IEnumerable<string> files)
         {
-            var managedCodeConventions = new ManagedCodeConventions(new RuntimeGraph());
+            var managedCodeConventions = new ManagedCodeConventions(RuntimeGraph.Empty);
             var collection = new ContentItemCollection();
             collection.Load(files);
 
@@ -68,7 +63,7 @@ namespace NuGet.Packaging.Rules
                         (var tfmNames, var suggestedDirectories) = GenerateWarningString(possibleFrameworks);
 
                         var issue = new List<PackagingLogMessage>();
-                        issue.Add(PackagingLogMessage.CreateWarning(string.Format(MessageFormat, tfmNames, suggestedDirectories),
+                        issue.Add(PackagingLogMessage.CreateWarning(string.Format(CultureInfo.CurrentCulture, MessageFormat, tfmNames, suggestedDirectories),
                             NuGetLogCode.NU5127));
                         return issue;
                     }
@@ -86,7 +81,7 @@ namespace NuGet.Packaging.Rules
 
             string suggestedDirectories = possibleFrameworks.Length > 1
                 ? CreateDirectoriesMessage(possibleFrameworks)
-                : string.Format("-lib/{0}/_._", possibleFrameworks[0]);
+                : string.Format(CultureInfo.CurrentCulture, "-lib/{0}/_._", possibleFrameworks[0]);
 
             return (tfmNames, suggestedDirectories);
         }
@@ -96,7 +91,7 @@ namespace NuGet.Packaging.Rules
             var suggestedDirectories = new StringBuilder();
             foreach (var framework in possibleFrameworks)
             {
-                suggestedDirectories.AppendFormat("-lib/{0}/_._", framework).AppendLine();
+                suggestedDirectories.AppendFormat(CultureInfo.CurrentCulture, "-lib/{0}/_._", framework).AppendLine();
             }
             return suggestedDirectories.ToString();
         }

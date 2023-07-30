@@ -11,7 +11,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
@@ -131,7 +130,7 @@ namespace NuGet.ProjectManagement.Projects
         protected virtual Task UpdateInternalTargetFrameworkAsync()
         {
             // Extending class will implement the functionality
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public override async Task<IEnumerable<PackageReference>> GetInstalledPackagesAsync(CancellationToken token)
@@ -159,7 +158,7 @@ namespace NuGet.ProjectManagement.Projects
         protected virtual Task<string> GetMSBuildProjectExtensionsPathAsync()
         {
             // Extending class will implement the functionality.
-            return Task.FromResult((string)null);
+            return TaskResult.Null<string>();
         }
 
         public override async Task<IReadOnlyList<PackageSpec>> GetPackageSpecsAsync(DependencyGraphCacheContext context)
@@ -177,7 +176,7 @@ namespace NuGet.ProjectManagement.Projects
                 if (packageSpec == null)
                 {
                     throw new InvalidOperationException(
-                        string.Format(Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
+                        string.Format(CultureInfo.CurrentCulture, Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
                 }
                 var metadata = new ProjectRestoreMetadata();
                 packageSpec.RestoreMetadata = metadata;
@@ -320,7 +319,7 @@ namespace NuGet.ProjectManagement.Projects
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(Strings.ErrorLoadingPackagesConfig, _jsonConfig.FullName, ex.Message), ex);
+                    string.Format(CultureInfo.CurrentCulture, Strings.ErrorLoadingPackagesConfig, _jsonConfig.FullName, ex.Message), ex);
             }
         }
 
@@ -339,7 +338,7 @@ namespace NuGet.ProjectManagement.Projects
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(Strings.ErrorLoadingPackagesConfig, _jsonConfig.FullName, ex.Message), ex);
+                    string.Format(CultureInfo.CurrentCulture, Strings.ErrorLoadingPackagesConfig, _jsonConfig.FullName, ex.Message), ex);
             }
         }
 
@@ -383,7 +382,7 @@ namespace NuGet.ProjectManagement.Projects
         // Overriding class wil implement the method
         public override Task<string> GetCacheFilePathAsync()
         {
-            return Task.FromResult((string)null);
+            return TaskResult.Null<string>();
         }
     }
 }

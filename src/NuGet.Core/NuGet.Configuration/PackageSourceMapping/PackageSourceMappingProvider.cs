@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace NuGet.Configuration
 {
-    internal class PackageSourceMappingProvider
+    public class PackageSourceMappingProvider
     {
         private readonly ISettings _settings;
 
@@ -15,6 +15,22 @@ namespace NuGet.Configuration
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
+
+        /// <summary>
+        /// Supports the disabling of saving to disk for any <see cref="ISettings"/> changes.
+        /// </summary>
+        /// <param name="shouldSkipSave">True to avoid saving any changes to disk and only modify the <see cref="ISettings"/> in memory.
+        /// Default is false.</param>
+        public PackageSourceMappingProvider(ISettings settings, bool shouldSkipSave)
+            : this(settings)
+        {
+            ShouldSkipSave = shouldSkipSave;
+        }
+
+        /// <summary>
+        /// Avoid saving to disk and only modify the <see cref="ISettings"/> in memory.
+        /// </summary>
+        public bool ShouldSkipSave { get; }
 
         public IReadOnlyList<PackageSourceMappingSourceItem> GetPackageSourceMappingItems()
         {
@@ -27,7 +43,7 @@ namespace NuGet.Configuration
             return packageSourceMappingSection.Items.OfType<PackageSourceMappingSourceItem>().ToList();
         }
 
-        public void Remove(IReadOnlyList<PackageSourceMappingSourceItem> packageSourceMappingSourceItems)
+        internal void Remove(IReadOnlyList<PackageSourceMappingSourceItem> packageSourceMappingSourceItems)
         {
             if (packageSourceMappingSourceItems == null || packageSourceMappingSourceItems.Count == 0)
             {
@@ -44,10 +60,13 @@ namespace NuGet.Configuration
                 catch { }
             }
 
-            _settings.SaveToDisk();
+            if (!ShouldSkipSave)
+            {
+                _settings.SaveToDisk();
+            }
         }
 
-        public void AddOrUpdatePackageSourceMappingSourceItem(PackageSourceMappingSourceItem packageSourceMappingSourceItem)
+        internal void AddOrUpdatePackageSourceMappingSourceItem(PackageSourceMappingSourceItem packageSourceMappingSourceItem)
         {
             if (packageSourceMappingSourceItem == null)
             {
@@ -56,7 +75,40 @@ namespace NuGet.Configuration
 
             _settings.AddOrUpdate(ConfigurationConstants.PackageSourceMapping, packageSourceMappingSourceItem);
 
-            _settings.SaveToDisk();
+            if (!ShouldSkipSave)
+            {
+                _settings.SaveToDisk();
+            }
+        }
+
+        public void SavePackageSourceMappings(IReadOnlyList<PackageSourceMappingSourceItem> packageSourceMappingsSourceItems)
+        {
+            if (packageSourceMappingsSourceItems == null)
+            {
+                throw new ArgumentNullException(nameof(packageSourceMappingsSourceItems));
+            }
+
+            IReadOnlyList<PackageSourceMappingSourceItem> existingSettingsLookup = GetPackageSourceMappingItems();
+            // Remove all old mappings not in new mappings
+            List<PackageSourceMappingSourceItem> removeMappings = new List<PackageSourceMappingSourceItem>();
+            foreach (PackageSourceMappingSourceItem sourceItem in existingSettingsLookup)
+            {
+                if (!packageSourceMappingsSourceItems.Contains(sourceItem))
+                {
+                    removeMappings.Add(sourceItem);
+                }
+            }
+
+            if (removeMappings.Count > 0)
+            {
+                Remove(removeMappings);
+            }
+
+            //Adds or updates mappings
+            foreach (PackageSourceMappingSourceItem sourceMappingItem in packageSourceMappingsSourceItems)
+            {
+                AddOrUpdatePackageSourceMappingSourceItem(sourceMappingItem);
+            }
         }
     }
 }

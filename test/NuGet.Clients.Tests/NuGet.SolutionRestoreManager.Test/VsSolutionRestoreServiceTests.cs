@@ -403,6 +403,45 @@ namespace NuGet.SolutionRestoreManager.Test
         }
 
         [Theory]
+        [InlineData(
+@"{
+    ""frameworks"": {
+        ""net5.0-windows7.0"": {
+            ""targetAlias"": ""net5.0-windows""
+        }
+    }
+}", "", "net5.0-windows")]
+        public async Task NominateProjectAsync_WithoutOriginalTargetFrameworks_SetOriginalTargetFrameworksToAlias(
+            string projectJson, string rawOriginalTargetFrameworks, string expectedOriginalTargetFrameworks)
+        {
+            var cps = NewCpsProject(
+                projectJson: projectJson,
+                crossTargeting: true);
+            var projectFullPath = cps.ProjectFullPath;
+            var pri2 = cps.ProjectRestoreInfo2;
+
+            pri2.OriginalTargetFrameworks = rawOriginalTargetFrameworks;
+
+            // Act
+            var actualRestoreSpec = await CaptureNominateResultAsync(projectFullPath, pri2);
+
+            // Assert
+            SpecValidationUtility.ValidateDependencySpec(actualRestoreSpec);
+
+            var actualProjectSpec = actualRestoreSpec.GetProjectSpec(projectFullPath);
+            Assert.NotNull(actualProjectSpec);
+
+            var actualMetadata = actualProjectSpec.RestoreMetadata;
+            Assert.NotNull(actualMetadata);
+            Assert.False(actualMetadata.CrossTargeting);
+
+            var actualOriginalTargetFrameworks = string.Join(";", actualMetadata.OriginalTargetFrameworks);
+            Assert.Equal(
+                expectedOriginalTargetFrameworks,
+                actualOriginalTargetFrameworks);
+        }
+
+        [Theory]
         [InlineData(true)]
         [InlineData(false)]
         public async Task NominateProjectAsync_Imports(bool isV2Nomination)
@@ -1683,14 +1722,18 @@ namespace NuGet.SolutionRestoreManager.Test
                         Enumerable.Empty<IVsReferenceItem>(),
                         Enumerable.Empty<IVsReferenceItem>(),
                         new[] {
-                            new VsProjectProperty("TreatWarningsAsErrors", "true")
+                            new VsProjectProperty("TreatWarningsAsErrors", "true"),
+                            new VsProjectProperty("WarningsAsErrors", "NU1603;NU1604"),
+                            new VsProjectProperty("WarningsNotAsErrors", "NU1801;NU1802")
                         }) :
                 new VsTargetFrameworkInfo(
                         "netcoreapp1.0",
                         new IVsReferenceItem[] { packageReference },
                         Enumerable.Empty<IVsReferenceItem>(),
                         new[] {
-                            new VsProjectProperty("TreatWarningsAsErrors", "true")
+                            new VsProjectProperty("TreatWarningsAsErrors", "true"),
+                            new VsProjectProperty("WarningsAsErrors", "NU1603;NU1604"),
+                            new VsProjectProperty("WarningsNotAsErrors", "NU1801;NU1802")
                         });
 
             var cps = NewCpsProject("{ }");
@@ -1710,7 +1753,12 @@ namespace NuGet.SolutionRestoreManager.Test
             Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.AllWarningsAsErrors);
             Assert.True(actualProjectSpec.TargetFrameworks.First().Dependencies.First().NoWarn.First().Equals(NuGetLogCode.NU1605));
             Assert.Null(actualProjectSpec.TargetFrameworks.First().RuntimeIdentifierGraphPath);
-
+            Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.WarningsAsErrors.Count.Equals(2));
+            Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.WarningsAsErrors.Contains(NuGetLogCode.NU1603));
+            Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.WarningsAsErrors.Contains(NuGetLogCode.NU1604));
+            Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.WarningsNotAsErrors.Count.Equals(2));
+            Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.WarningsNotAsErrors.Contains(NuGetLogCode.NU1801));
+            Assert.True(actualProjectSpec.RestoreMetadata.ProjectWideWarningProperties.WarningsNotAsErrors.Contains(NuGetLogCode.NU1802));
         }
 
         [Theory]
@@ -2263,7 +2311,7 @@ namespace NuGet.SolutionRestoreManager.Test
             ProjectNames projectName = new ProjectNames(@"f:\project\project.vcxproj", "project", "project.csproj", "project", Guid.NewGuid().ToString());
             var emptyReferenceItems = Array.Empty<VsReferenceItem>();
             var packageReferenceProperties = new VsReferenceProperties();
-            var managedFramework = CommonFrameworks.Net50;
+            var managedFramework = NuGetFramework.Parse("net5.0-windows10.0");
             var nativeFramework = CommonFrameworks.Native;
             var targetFrameworks = new VsTargetFrameworkInfo2[]
             {
@@ -2287,7 +2335,7 @@ namespace NuGet.SolutionRestoreManager.Test
 
             if (isDualCompatibilityFramework)
             {
-                var comparer = new NuGetFrameworkFullComparer();
+                var comparer = NuGetFrameworkFullComparer.Instance;
                 comparer.Equals(targetFrameworkInfo.FrameworkName, managedFramework).Should().BeTrue();
                 targetFrameworkInfo.FrameworkName.Should().BeOfType<DualCompatibilityFramework>();
                 var dualCompatibilityFramework = targetFrameworkInfo.FrameworkName as DualCompatibilityFramework;

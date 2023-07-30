@@ -3,12 +3,15 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using FluentAssertions;
 using Newtonsoft.Json.Linq;
+using NuGet.Packaging;
 using NuGet.Test.Utility;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -27,7 +30,7 @@ namespace NuGet.CommandLine.Test
                 var workingDirectory = pathContext.WorkingDirectory;
                 var packageDirectory = pathContext.PackageSource;
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
-                var package = new ZipPackage(packageFileName);
+                var package = new FileInfo(packageFileName);
 
                 Util.CreateFile(
                     workingDirectory,
@@ -69,7 +72,7 @@ namespace NuGet.CommandLine.Test
                             return new Action<HttpListenerResponse>(response =>
                             {
                                 response.ContentType = "application/zip";
-                                using (var stream = package.GetStream())
+                                using (var stream = package.OpenRead())
                                 {
                                     var content = stream.ReadAllBytes();
                                     MockServer.SetResponseContent(response, content);
@@ -81,7 +84,7 @@ namespace NuGet.CommandLine.Test
                             return new Action<HttpListenerResponse>(response =>
                             {
                                 response.ContentType = "application/atom+xml;type=entry;charset=utf-8";
-                                var odata = server.ToOData(package);
+                                var odata = server.ToOData(new PackageArchiveReader(package.OpenRead()));
                                 MockServer.SetResponseContent(response, odata);
                             });
                         }
@@ -109,14 +112,13 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingDirectory,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     timer.Stop();
                     server.Stop();
 
                     // Assert
-                    Assert.True(Util.IsSuccess(r1), r1.Item2 + " " + r1.Item3);
+                    Assert.True(r1.Success, r1.AllOutput);
 
                     var path = Path.Combine(pathContext.PackagesV2, "testpackage1.1.1.0", "testpackage1.1.1.0.nupkg");
 
@@ -137,7 +139,7 @@ namespace NuGet.CommandLine.Test
                 var workingDirectory = pathContext.WorkingDirectory;
                 var packageDirectory = pathContext.PackageSource;
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
-                var package = new ZipPackage(packageFileName);
+                var package = new FileInfo(packageFileName);
 
                 var projectJson = @"{
                     ""dependencies"": {
@@ -183,7 +185,7 @@ namespace NuGet.CommandLine.Test
                             return new Action<HttpListenerResponse>(response =>
                             {
                                 response.ContentType = "application/zip";
-                                using (var stream = package.GetStream())
+                                using (var stream = package.OpenRead())
                                 {
                                     var content = stream.ReadAllBytes();
                                     MockServer.SetResponseContent(response, content);
@@ -224,15 +226,14 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingDirectory,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     timer.Stop();
 
                     server.Stop();
 
                     // Assert
-                    Assert.True(Util.IsSuccess(r1), r1.Item2 + " " + r1.Item3);
+                    Assert.True(r1.Success, r1.AllOutput);
 
                     Assert.True(
                         File.Exists(
@@ -247,9 +248,9 @@ namespace NuGet.CommandLine.Test
                     Assert.True(File.Exists(Path.Combine(workingDirectory, "project.lock.json")));
 
                     // Everything should be hit 3 times
-                    foreach (var url in hitsByUrl.Keys)
+                    foreach ((var url, var hits) in hitsByUrl)
                     {
-                        Assert.True(hitsByUrl[url] == 3, url);
+                        Assert.True(hits == 3, url);
                     }
                 }
             }
@@ -267,7 +268,7 @@ namespace NuGet.CommandLine.Test
                 var workingDirectory = pathContext.WorkingDirectory;
                 var packageDirectory = pathContext.PackageSource;
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
-                var package = new ZipPackage(packageFileName);
+                var package = new FileInfo(packageFileName);
 
                 var projectJsonContent = @"{
                     ""dependencies"": {
@@ -319,7 +320,7 @@ namespace NuGet.CommandLine.Test
                             return new Action<HttpListenerResponse>(response =>
                             {
                                 response.ContentType = "application/zip";
-                                using (var stream = package.GetStream())
+                                using (var stream = package.OpenRead())
                                 {
                                     var content = stream.ReadAllBytes();
                                     MockServer.SetResponseContent(response, content);
@@ -366,15 +367,14 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingDirectory,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     timer.Stop();
 
                     server.Stop();
 
                     // Assert
-                    Assert.True(Util.IsSuccess(r1), r1.Item2 + " " + r1.Item3);
+                    Assert.True(r1.Success, r1.AllOutput);
 
                     Assert.True(
                         File.Exists(
@@ -387,9 +387,9 @@ namespace NuGet.CommandLine.Test
                     Assert.True(File.Exists(Path.Combine(workingDirectory, "project.lock.json")));
 
                     // Everything should be hit 3 times
-                    foreach (var url in hitsByUrl.Keys)
+                    foreach ((var url, var hits) in hitsByUrl)
                     {
-                        Assert.True(hitsByUrl[url] == 3, url);
+                        Assert.True(hits == 3, url);
                     }
 
                     Assert.True(timer.Elapsed > minTime);
@@ -410,7 +410,7 @@ namespace NuGet.CommandLine.Test
                 var packageDirectory = pathContext.PackageSource;
 
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
-                var package = new ZipPackage(packageFileName);
+                var package = new FileInfo(packageFileName);
 
                 Util.CreateFile(
                     workingDirectory,
@@ -458,7 +458,7 @@ namespace NuGet.CommandLine.Test
                             return new Action<HttpListenerResponse>(response =>
                             {
                                 response.ContentType = "application/zip";
-                                using (var stream = package.GetStream())
+                                using (var stream = package.OpenRead())
                                 {
                                     var content = stream.ReadAllBytes();
                                     MockServer.SetResponseContent(response, content);
@@ -551,8 +551,7 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingDirectory,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     timer.Stop();
 
@@ -567,9 +566,9 @@ namespace NuGet.CommandLine.Test
                                 "testpackage1.1.1.0", "testpackage1.1.1.0.nupkg")));
 
                     // Everything should be hit 3 times
-                    foreach (var url in hitsByUrl.Keys)
+                    foreach ((var url, var hits) in hitsByUrl)
                     {
-                        Assert.True(hitsByUrl[url] == 3, url);
+                        Assert.True(hits == 3, url);
                     }
 
                     Assert.True(timer.Elapsed > minTime);

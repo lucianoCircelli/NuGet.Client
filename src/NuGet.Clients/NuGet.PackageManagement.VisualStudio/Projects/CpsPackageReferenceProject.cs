@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -85,11 +86,11 @@ namespace NuGet.PackageManagement.VisualStudio
                 if (shouldThrow)
                 {
                     throw new ProjectNotNominatedException(
-                        string.Format(Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
+                        string.Format(CultureInfo.CurrentCulture, Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
                 }
                 else
                 {
-                    return Task.FromResult<string>(null);
+                    return TaskResult.Null<string>();
                 }
             }
 
@@ -133,7 +134,7 @@ namespace NuGet.PackageManagement.VisualStudio
             if (!_projectSystemCache.TryGetProjectRestoreInfo(ProjectFullPath, out projectRestoreInfo, out additionalMessages))
             {
                 throw new ProjectNotNominatedException(
-                    string.Format(Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
+                    string.Format(CultureInfo.CurrentCulture, Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
             }
 
             // Apply ISettings when needed to the return values.
@@ -204,7 +205,7 @@ namespace NuGet.PackageManagement.VisualStudio
         protected override IEnumerable<PackageReference> ResolvedInstalledPackagesList(
             IEnumerable<LibraryDependency> libraries,
             NuGetFramework targetFramework,
-            IReadOnlyList<LockFileTarget> targets,
+            IList<LockFileTarget> targets,
             List<FrameworkInstalledPackages> installedPackagesInCache)
         {
             FrameworkInstalledPackages targetFrameworkPackages = installedPackagesInCache.FirstOrDefault(t => t.TargetFramework.Equals(targetFramework));
@@ -226,7 +227,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         protected override IReadOnlyList<PackageReference> ResolvedTransitivePackagesList(
             NuGetFramework targetFramework,
-            IReadOnlyList<LockFileTarget> targets,
+            IList<LockFileTarget> targets,
             List<FrameworkInstalledPackages> installedPackagesInCache,
             List<FrameworkInstalledPackages> transitivePackagesInCache)
         {
@@ -274,6 +275,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 if (conditionalService == null)
                 {
                     throw new InvalidOperationException(string.Format(
+                        CultureInfo.CurrentCulture,
                         Strings.UnableToGetCPSPackageInstallationService,
                         ProjectFullPath));
                 }
@@ -291,6 +293,12 @@ namespace NuGet.PackageManagement.VisualStudio
                         formattedRange,
                         TargetFrameworkCondition,
                         originalFramework);
+
+                    // This is the update operation
+                    if (!reference.IsAdded)
+                    {
+                        await reference.Metadata.SetPropertyValueAsync("Version", formattedRange);
+                    }
 
                     // SuppressParent could be set to All if developmentDependency flag is true in package nuspec file.
                     if (installationContext.SuppressParent != LibraryIncludeFlagUtils.DefaultSuppressParent &&
@@ -363,17 +371,14 @@ namespace NuGet.PackageManagement.VisualStudio
             if (spec == null)
             {
                 throw new ProjectNotNominatedException(
-                    string.Format(Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
+                    string.Format(CultureInfo.CurrentCulture, Strings.ProjectNotLoaded_RestoreFailed, ProjectName));
             }
 
             return Task.FromResult(NoOpRestoreUtilities.GetProjectCacheFilePath(cacheRoot: spec.RestoreMetadata.OutputPath));
         }
 
-        // To avoid race condition, we work on copy of cache InstalledPackages and TransitivePackages.
-        protected override (List<FrameworkInstalledPackages> installedPackagesCopy, List<FrameworkInstalledPackages> transitivePackagesCopy) GetInstalledAndTransitivePackagesCacheCopy()
-        {
-            return (new List<FrameworkInstalledPackages>(InstalledPackages), new List<FrameworkInstalledPackages>(TransitivePackages));
-        }
+        /// <inheritdoc/>
+        protected override List<FrameworkInstalledPackages> GetCollectionCopy(List<FrameworkInstalledPackages> collection) => new(collection);
 
         #endregion
     }

@@ -519,7 +519,7 @@ namespace NuGet.ProjectModel
             });
         }
 
-        internal static void ReadCentralTransitveDependencyGroup(
+        internal static void ReadCentralTransitiveDependencyGroup(
             JsonTextReader jsonReader,
             IList<LibraryDependency> results,
             string packageSpecPath)
@@ -808,6 +808,7 @@ namespace NuGet.ProjectModel
                     {
                         throw FileFormatException.Create(
                             string.Format(
+                                CultureInfo.CurrentCulture,
                                 Strings.Log_InvalidImportFramework,
                                 import,
                                 PackageSpec.PackageSpecFileName),
@@ -924,6 +925,7 @@ namespace NuGet.ProjectModel
             List<ProjectRestoreMetadataFrameworkInfo> targetFrameworks = null;
             var validateRuntimeAssets = false;
             WarningProperties warningProperties = null;
+            RestoreAuditProperties auditProperties = null;
 
             jsonReader.ReadObject(propertyName =>
             {
@@ -1038,6 +1040,34 @@ namespace NuGet.ProjectModel
                         restoreLockProperties = new RestoreLockProperties(restorePackagesWithLockFile, nuGetLockFilePath, restoreLockedMode);
                         break;
 
+                    case "restoreAuditProperties":
+                        string enableAudit = null, auditLevel = null, auditMode = null;
+                        jsonReader.ReadObject(auditPropertyName =>
+                        {
+
+                            switch (auditPropertyName)
+                            {
+                                case "enableAudit":
+                                    enableAudit = jsonReader.ReadNextTokenAsString();
+                                    break;
+
+                                case "auditLevel":
+                                    auditLevel = jsonReader.ReadNextTokenAsString();
+                                    break;
+
+                                case "auditMode":
+                                    auditMode = jsonReader.ReadNextTokenAsString();
+                                    break;
+                            }
+                        });
+                        auditProperties = new RestoreAuditProperties()
+                        {
+                            EnableAudit = enableAudit,
+                            AuditLevel = auditLevel,
+                            AuditMode = auditMode,
+                        };
+                        break;
+
                     case "skipContentFileWrite":
                         skipContentFileWrite = ReadNextTokenAsBoolOrFalse(jsonReader, packageSpec.FilePath);
                         break;
@@ -1059,6 +1089,7 @@ namespace NuGet.ProjectModel
                         var allWarningsAsErrors = false;
                         var noWarn = new HashSet<NuGetLogCode>();
                         var warnAsError = new HashSet<NuGetLogCode>();
+                        var warningsNotAsErrors = new HashSet<NuGetLogCode>();
 
                         jsonReader.ReadObject(warningPropertiesPropertyName =>
                         {
@@ -1075,10 +1106,14 @@ namespace NuGet.ProjectModel
                                 case "warnAsError":
                                     ReadNuGetLogCodes(jsonReader, warnAsError);
                                     break;
+
+                                case "warnNotAsError":
+                                    ReadNuGetLogCodes(jsonReader, warningsNotAsErrors);
+                                    break;
                             }
                         });
 
-                        warningProperties = new WarningProperties(warnAsError, noWarn, allWarningsAsErrors);
+                        warningProperties = new WarningProperties(warnAsError, noWarn, allWarningsAsErrors, warningsNotAsErrors);
                         break;
                 }
             });
@@ -1098,6 +1133,7 @@ namespace NuGet.ProjectModel
             msbuildMetadata.CentralPackageVersionsEnabled = centralPackageVersionsManagementEnabled;
             msbuildMetadata.CentralPackageVersionOverrideDisabled = centralPackageVersionOverrideDisabled;
             msbuildMetadata.CentralPackageTransitivePinningEnabled = CentralPackageTransitivePinningEnabled;
+            msbuildMetadata.RestoreAuditProperties = auditProperties;
 
             if (configFilePaths != null)
             {
@@ -1424,7 +1460,7 @@ namespace NuGet.ProjectModel
 
             jsonReader.ReadObject(propertyName =>
             {
-                dependencies = dependencies ?? new List<RuntimePackageDependency>();
+                dependencies ??= new List<RuntimePackageDependency>();
 
                 var dependency = new RuntimePackageDependency(propertyName, VersionRange.Parse(jsonReader.ReadNextTokenAsString()));
 
@@ -1433,7 +1469,7 @@ namespace NuGet.ProjectModel
 
             return new RuntimeDependencySet(
                 dependencySetName,
-                dependencies ?? Enumerable.Empty<RuntimePackageDependency>());
+                dependencies);
         }
 
         private static RuntimeDescription ReadRuntimeDescription(JsonTextReader jsonReader, string runtimeName)
@@ -1449,7 +1485,7 @@ namespace NuGet.ProjectModel
                 }
                 else
                 {
-                    additionalDependencies = additionalDependencies ?? new List<RuntimeDependencySet>();
+                    additionalDependencies ??= new List<RuntimeDependencySet>();
 
                     RuntimeDependencySet dependency = ReadRuntimeDependencySet(jsonReader, propertyName);
 
@@ -1459,8 +1495,8 @@ namespace NuGet.ProjectModel
 
             return new RuntimeDescription(
                 runtimeName,
-                inheritedRuntimes ?? Enumerable.Empty<string>(),
-                additionalDependencies ?? Enumerable.Empty<RuntimeDependencySet>());
+                inheritedRuntimes,
+                additionalDependencies);
         }
 
         private static List<RuntimeDescription> ReadRuntimes(JsonTextReader jsonReader)
@@ -1502,7 +1538,7 @@ namespace NuGet.ProjectModel
                     else
                     {
                         throw FileFormatException.Create(
-                            string.Format("The value of a script in '{0}' can only be a string or an array of strings", PackageSpec.PackageSpecFileName),
+                            string.Format(CultureInfo.CurrentCulture, "The value of a script in '{0}' can only be a string or an array of strings", PackageSpec.PackageSpecFileName),
                             jsonReader.LineNumber,
                             jsonReader.LinePosition,
                             packageSpec.FilePath);

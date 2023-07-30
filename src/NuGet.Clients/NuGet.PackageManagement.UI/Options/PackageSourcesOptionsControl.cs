@@ -14,19 +14,23 @@ using System.Windows.Forms;
 using Microsoft;
 using Microsoft.ServiceHub.Framework;
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Imaging;
+using Microsoft.VisualStudio.Imaging.Interop;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Configuration;
-using NuGet.PackageManagement.UI;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common;
 using NuGet.VisualStudio.Internal.Contracts;
 using NuGet.VisualStudio.Telemetry;
+using StreamJsonRpc;
+using StreamJsonRpc.Protocol;
+using GelUtilities = Microsoft.Internal.VisualStudio.PlatformUI.Utilities;
 using IAsyncServiceProvider = Microsoft.VisualStudio.Shell.IAsyncServiceProvider;
 using Task = System.Threading.Tasks.Task;
 
-namespace NuGet.Options
+namespace NuGet.PackageManagement.UI.Options
 {
     /// <summary>
     /// Represents the Tools - Options - Package Manager dialog
@@ -47,8 +51,41 @@ namespace NuGet.Options
         private INuGetSourcesService _nugetSourcesService; // Store proxy object in case the dialog is up and we lose connection we wont grab the local proxy and try to save to that
 #pragma warning restore ISB001 // Dispose of proxies, disposed in disposing event or in ClearSettings
 
+        private static IVsImageService2 ImageService
+        {
+            get
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                return (IVsImageService2)Package.GetGlobalService(typeof(SVsImageService));
+            }
+        }
+
+        public static Image WarningIcon
+        {
+            get
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+
+                ImageAttributes attributes = new ImageAttributes
+                {
+                    StructSize = Marshal.SizeOf(typeof(ImageAttributes)),
+                    ImageType = (uint)_UIImageType.IT_Bitmap,
+                    Format = (uint)_UIDataFormat.DF_WinForms,
+                    LogicalWidth = 16,
+                    LogicalHeight = 16,
+                    Flags = (uint)_ImageAttributesFlags.IAF_RequiredFlags
+                };
+
+                IVsUIObject uIObj = ImageService.GetImage(KnownMonikers.StatusWarning, attributes);
+
+                return (Image)GelUtilities.GetObjectData(uIObj);
+            }
+        }
+
         public PackageSourcesOptionsControl(IAsyncServiceProvider asyncServiceProvider)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             InitializeComponent();
 
             _asyncServiceProvider = asyncServiceProvider;
@@ -56,6 +93,9 @@ namespace NuGet.Options
             SetupEventHandlers();
 
             UpdateDPI();
+
+            HttpWarningIcon.Image = WarningIcon;
+            HttpWarning.Text = Resources.Warning_NewHTTPSource_VSOptions;
         }
 
         private void UpdateDPI()
@@ -244,27 +284,28 @@ namespace NuGet.Options
                     await _nugetSourcesService.SavePackageSourceContextInfosAsync(packageSources, cancellationToken);
                 }
             }
-            // Thrown during creating or saving NuGet.Config.
-            catch (NuGetConfigurationException ex)
-            {
-                MessageHelper.ShowErrorMessage(ex.Message, Resources.ErrorDialogBoxTitle);
-                return false;
-            }
-            // Thrown if no nuget.config found.
-            catch (InvalidOperationException ex)
-            {
-                MessageHelper.ShowErrorMessage(ex.Message, Resources.ErrorDialogBoxTitle);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                MessageHelper.ShowErrorMessage(Resources.ShowError_ConfigUnauthorizedAccess, Resources.ErrorDialogBoxTitle);
-                return false;
-            }
-            // Unknown exception.
             catch (Exception ex)
             {
-                MessageHelper.ShowErrorMessage(Resources.ShowError_ApplySettingFailed, Resources.ErrorDialogBoxTitle);
+                if (ex is RemoteInvocationException remoteException &&
+                    remoteException.DeserializedErrorData is CommonErrorData commonError)
+                {
+                    if (commonError.TypeName == typeof(NuGetConfigurationException).FullName || // Thrown during creating or saving NuGet.Config.
+                        commonError.TypeName == typeof(InvalidOperationException).FullName) // Thrown if no nuget.config found.
+                    {
+                        MessageHelper.ShowErrorMessage(ex.Message, Resources.ErrorDialogBoxTitle);
+                        return false;
+                    }
+                    else if (commonError.TypeName == typeof(UnauthorizedAccessException).FullName)
+                    {
+                        MessageHelper.ShowErrorMessage(Resources.ShowError_ConfigUnauthorizedAccess, Resources.ErrorDialogBoxTitle);
+                        return false;
+                    }
+                }
+                else
+                {
+                    MessageHelper.ShowErrorMessage(Resources.ShowError_ApplySettingFailed, Resources.ErrorDialogBoxTitle);
+                }
+
                 ActivityLog.LogError(NuGetUI.LogEntrySource, ex.ToString());
                 return false;
             }
@@ -660,6 +701,23 @@ namespace NuGet.Options
             // Check to make sure path does not contain any invalid chars.
             // Otherwise, Path.IsPathRooted() will throw an ArgumentException.
             return path.IndexOfAny(Path.GetInvalidPathChars()) == -1 && Path.IsPathRooted(path);
+        }
+
+        private void NewPackageSource_TextChanged(object sender, EventArgs e)
+        {
+            var source = new PackageSource(NewPackageSource.Text.Trim(), NewPackageName.Text.Trim());
+
+            // Warn if the source is http, support for this will be removed
+            if (source.IsHttp && !source.IsHttps)
+            {
+                HttpWarning.Visible = true;
+                HttpWarningIcon.Visible = true;
+            }
+            else
+            {
+                HttpWarning.Visible = false;
+                HttpWarningIcon.Visible = false;
+            }
         }
     }
 

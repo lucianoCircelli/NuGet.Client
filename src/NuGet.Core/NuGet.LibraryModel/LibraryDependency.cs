@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using NuGet.Common;
 using NuGet.Shared;
 using NuGet.Versioning;
@@ -19,7 +18,7 @@ namespace NuGet.LibraryModel
 
         public LibraryIncludeFlags SuppressParent { get; set; } = LibraryIncludeFlagUtils.DefaultSuppressParent;
 
-        public IList<NuGetLogCode> NoWarn { get; set; } = new List<NuGetLogCode>();
+        public IList<NuGetLogCode> NoWarn { get; set; }
 
         public string Name => LibraryRange.Name;
 
@@ -47,7 +46,10 @@ namespace NuGet.LibraryModel
         /// </summary>
         public VersionRange VersionOverride { get; set; }
 
-        public LibraryDependency() { }
+        public LibraryDependency()
+        {
+            NoWarn = new List<NuGetLogCode>();
+        }
 
         internal LibraryDependency(
             LibraryRange libraryRange,
@@ -75,11 +77,8 @@ namespace NuGet.LibraryModel
 
         public override string ToString()
         {
-            var sb = new StringBuilder();
-            sb.Append(LibraryRange);
-            sb.Append(" ");
-            sb.Append(LibraryIncludeFlagUtils.GetFlagString(IncludeType));
-            return sb.ToString();
+            // Explicitly call .ToString() to ensure string.Concat(string, string, string) overload is called.
+            return LibraryRange.ToString() + " " + LibraryIncludeFlagUtils.GetFlagString(IncludeType);
         }
 
         public override int GetHashCode()
@@ -87,14 +86,14 @@ namespace NuGet.LibraryModel
             var hashCode = new HashCodeCombiner();
 
             hashCode.AddObject(LibraryRange);
-            hashCode.AddObject(IncludeType);
-            hashCode.AddObject(SuppressParent);
+            hashCode.AddStruct(IncludeType);
+            hashCode.AddStruct(SuppressParent);
             hashCode.AddObject(AutoReferenced);
             hashCode.AddSequence(NoWarn);
             hashCode.AddObject(GeneratePathProperty);
             hashCode.AddObject(VersionCentrallyManaged);
             hashCode.AddObject(Aliases);
-            hashCode.AddObject(ReferenceType);
+            hashCode.AddStruct(ReferenceType);
 
             return hashCode.CombinedHash;
         }
@@ -124,7 +123,7 @@ namespace NuGet.LibraryModel
                    GeneratePathProperty == other.GeneratePathProperty &&
                    VersionCentrallyManaged == other.VersionCentrallyManaged &&
                    Aliases == other.Aliases &&
-                   VersionOverride == other.VersionOverride &&
+                   EqualityUtility.EqualsWithNullCheck(VersionOverride, other.VersionOverride) &&
                    ReferenceType == other.ReferenceType;
         }
 

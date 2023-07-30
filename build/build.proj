@@ -160,9 +160,9 @@
   <Target Name="BuildNoVSIX" AfterTargets="BuildVS" Condition=" '$(IsXPlat)' != 'true' ">
     <Message Text="Building" Importance="high" />
 
-    <MSBuild Projects="@(SolutionProjectsWithoutVSIX)"
+    <MSBuild Projects="@(SolutionProjects)"
              Targets="Build"
-             Properties="$(CommonMSBuildProperties)" />
+             Properties="$(CommonMSBuildProperties);CreateVsixContainer=false" />
   </Target>
 
   <!--
@@ -294,40 +294,6 @@
 
   <!--
     ============================================================
-    Restore Apex
-    ============================================================
-  -->
-  <Target Name="RestoreApex">
-    <Message Text="Restoring Apex projects" Importance="high" />
-
-    <PropertyGroup>
-      <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
-      <ProjectListValue>@(ApexProjects)</ProjectListValue>
-    </PropertyGroup>
-
-    <MSBuild
-      Projects="restorehelper.targets"
-      Targets="Restore"
-      Properties="RestoreGraphProjectInput=$(ProjectListValue);
-                  $(CommonMSBuildProperties)">
-    </MSBuild>
-  </Target>
-
-    <!--
-    ============================================================
-    EnsurePackageReferenceVersionsInSolution
-    ============================================================
-  -->
-  <Target Name="EnsurePackageReferenceVersionsInSolution">
-      <MsBuild
-        Projects="@(AllRepoProjects)"
-        Targets="EnsurePackageReferenceVersions"
-        Properties="SkipCentralPackageVersions=true">
-    </MsBuild>
-  </Target>
-
-  <!--
-    ============================================================
     Get projects need to be packed
     ============================================================
   -->
@@ -390,10 +356,11 @@
     <MakeDir Directories="$(TestResultsDirectory)" />
 
     <PropertyGroup>
-      <DesktopTestResultsTrx Condition=" '$(TestResultsFileName)' != '' ">$(TestResultsDirectory)\$(TestResultsFileName)-desktop.trx</DesktopTestResultsTrx>
-      <CoreTestResultsTrx Condition=" '$(TestResultsFileName)' != '' ">$(TestResultsDirectory)\$(TestResultsFileName)-core.trx</CoreTestResultsTrx>
       <DotNetTestConsoleVerbosity Condition="'$(DotNetTestConsoleVerbosity)' == '' And '$(System_Debug)' == 'true'">detailed</DotNetTestConsoleVerbosity>
       <DotNetTestConsoleVerbosity Condition="'$(DotNetTestConsoleVerbosity)' == ''">minimal</DotNetTestConsoleVerbosity>
+    </PropertyGroup>
+    <PropertyGroup>
+      <DotNetTestAdditionalArgs Condition="'$(SYSTEM_DEBUG)' == 'true' And '$(BINLOG_DIRECTORY)' != ''">--diag &quot;$(BINLOG_DIRECTORY)\vstest.log&quot;</DotNetTestAdditionalArgs>
     </PropertyGroup>
 
     <ItemGroup Condition=" '$(SkipDesktopAssemblies)' != 'true' ">
@@ -401,8 +368,7 @@
     </ItemGroup>
 
     <PropertyGroup Condition=" '$(SkipDesktopAssemblies)' != 'true' ">
-      <DesktopTestCommand>&quot;$(DotnetExePath)&quot; test @(DesktopInputTestAssemblies->'&quot;%(Identity)&quot;', ' ') --logger:&quot;console;verbosity=$(DotNetTestConsoleVerbosity)&quot; --settings:&quot;$(MSBuildThisFileDirectory)xunit.runsettings&quot;</DesktopTestCommand>
-      <DesktopTestCommand Condition=" '$(DesktopTestResultsTrx)' != '' ">$(DesktopTestCommand) --logger:&quot;trx;LogFilePath=$(DesktopTestResultsTrx)&quot;</DesktopTestCommand>
+      <DesktopTestCommand>&quot;$(DotnetExePath)&quot; test @(DesktopInputTestAssemblies->'&quot;%(Identity)&quot;', ' ') --logger:&quot;console;verbosity=$(DotNetTestConsoleVerbosity)&quot; --settings:&quot;$(MSBuildThisFileDirectory)xunit.runsettings&quot; --ResultsDirectory:&quot;$(TestResultsDirectory)&quot; --logger:&quot;trx&quot; $(DotNetTestAdditionalArgs)</DesktopTestCommand>
     </PropertyGroup>
 
     <ItemGroup Condition=" '$(SkipCoreAssemblies)' != 'true' ">
@@ -410,8 +376,7 @@
     </ItemGroup>
     
     <PropertyGroup Condition=" '$(SkipCoreAssemblies)' != 'true' ">
-      <CoreTestCommand>&quot;$(DotnetExePath)&quot; test @(CoreInputTestAssemblies->'&quot;%(Identity)&quot;', ' ') --logger:&quot;console;verbosity=$(DotNetTestConsoleVerbosity)&quot; --settings:&quot;$(MSBuildThisFileDirectory)xunit.runsettings&quot;</CoreTestCommand>
-      <CoreTestCommand Condition=" '$(CoreTestResultsTrx)' != '' ">$(CoreTestCommand) --logger:&quot;trx;LogFilePath=$(CoreTestResultsTrx)&quot;</CoreTestCommand>
+      <CoreTestCommand>&quot;$(DotnetExePath)&quot; test @(CoreInputTestAssemblies->'&quot;%(Identity)&quot;', ' ') --logger:&quot;console;verbosity=$(DotNetTestConsoleVerbosity)&quot; --settings:&quot;$(MSBuildThisFileDirectory)xunit.runsettings&quot; --ResultsDirectory:&quot;$(TestResultsDirectory)&quot; --logger:&quot;trx&quot; $(DotNetTestAdditionalArgs)</CoreTestCommand>
     </PropertyGroup>
 
     <!-- Desktop -->
@@ -439,17 +404,17 @@
       <Output TaskParameter="ExitCode" PropertyName="VSTestErrorCode"/>
     </Exec>
 
-    <Error Text="Desktop $(TestResultsFileName) tests failed! Results: $(DesktopTestResultsTrx)"
+    <Error Text="Desktop $(TestResultsFileName) tests failed!"
            Condition=" '$(SkipDesktopAssemblies)' != 'true' AND '$(DesktopTestErrorCode)' != '0' AND '$(DesktopTestErrorCode)' != '' " />
     
-    <Error Text="NETCore $(TestResultsFileName) tests failed! Results: $(CoreTestResultsTrx)"
+    <Error Text="NETCore $(TestResultsFileName) tests failed!"
            Condition=" '$(SkipCoreAssemblies)' != 'true' AND '$(VSTestErrorCode)' != '0' AND '$(VSTestErrorCode)' != '' " />
 
-    <Message Text="Desktop $(TestResultsFileName) tests passed! Results: $(DesktopTestResultsTrx)"
+    <Message Text="Desktop $(TestResultsFileName) tests passed!"
              Importance="High"
              Condition=" '$(SkipDesktopAssemblies)' != 'true' AND '$(DesktopTestErrorCode)' == '0' " />
 
-    <Message Text="NETCore $(TestResultsFileName) tests passed! Results: $(CoreTestResultsTrx)"
+    <Message Text="NETCore $(TestResultsFileName) tests passed!"
              Importance="High"
              Condition=" '$(SkipCoreAssemblies)' != 'true' AND '$(VSTestErrorCode)' == '0' " />
   </Target>

@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using FluentAssertions;
 using Microsoft.Build.Framework;
-using Moq;
 using NuGet.Packaging;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
@@ -51,6 +50,28 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
             }
         }
 
+        [Fact]
+        public void Resolve_WhenNuGetConfigUnreadable_ReturnsFailedSdkResultAndLogsError()
+        {
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                var sdkReference = new SdkReference(PackageA, VersionOnePointZero, minimumVersion: null);
+                var sdkResolverContext = new MockSdkResolverContext(pathContext.WorkingDirectory);
+                var sdkResultFactory = new MockSdkResultFactory();
+                var sdkResolver = new NuGetSdkResolver();
+                File.WriteAllText(pathContext.NuGetConfig, string.Empty);
+
+                MockSdkResult result = sdkResolver.Resolve(sdkReference, sdkResolverContext, sdkResultFactory) as MockSdkResult;
+
+                result.Should().NotBeNull();
+                result.Success.Should().BeFalse();
+                result.Path.Should().BeNull();
+                result.Version.Should().BeNull();
+                result.Errors.Should().BeEquivalentTo(new[] { $"Failed to load NuGet settings. NuGet.Config is not valid XML. Path: '{pathContext.NuGetConfig}'." });
+                result.Warnings.Should().BeEmpty();
+            }
+        }
+
         /// <summary>
         /// Verifies that <see cref="NuGetSdkResolver.Resolve(SdkReference, SdkResolverContext, SdkResultFactory)" /> returns a valid <see cref="SdkResult" /> when a package is found on the feed.
         /// </summary>
@@ -77,6 +98,29 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
                 result.Version.Should().Be(sdkReference.Version);
                 result.Errors.Should().BeEmpty();
                 result.Warnings.Should().BeEmpty();
+
+                bool wasMessageFound = false;
+
+                foreach ((string Message, MessageImportance _) in sdkResolverContext.MockSdkLogger.LoggedMessages)
+                {
+                    // On Linux and macOS the message will be:
+                    //
+                    //    X.509 certificate chain validation will not have any trusted roots.
+                    //    Chain building will fail with an untrusted status.
+                    //
+                    // This is because this test is not a .NET SDK test but a unit test.
+                    if (Message.Contains("X.509 certificate chain validation will"))
+                    {
+                        wasMessageFound = true;
+                        break;
+                    }
+                }
+
+#if NETFRAMEWORK
+                wasMessageFound.Should().BeFalse();
+#else
+                wasMessageFound.Should().BeTrue();
+#endif
             }
         }
 

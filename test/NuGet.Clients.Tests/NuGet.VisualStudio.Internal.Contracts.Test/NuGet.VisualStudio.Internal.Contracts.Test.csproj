@@ -1,7 +1,4 @@
-<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.test.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>$(NETFXTargetFramework)</TargetFramework>
     <Description>Unit and integration tests for NuGet.VisualStudio.Internal.Contracts.</Description>
@@ -14,9 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(NuGetClientsSrcDirectory)NuGet.VisualStudio.Internal.Contracts\NuGet.VisualStudio.Internal.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio.Internal.Contracts\NuGet.VisualStudio.Internal.Contracts.csproj" />
   </ItemGroup>
-
-  <Import Project="$(BuildCommonDirectory)common.targets" />
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

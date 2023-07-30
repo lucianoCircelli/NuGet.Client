@@ -57,6 +57,8 @@ namespace NuGet.PackageManagement.UI
 
         public VersionRange AllowedVersions { get; set; }
 
+        public VersionRange VersionOverride { get; set; }
+
         public IReadOnlyCollection<PackageSourceContextInfo> Sources { get; set; }
 
         public bool IncludePrerelease { get; set; }
@@ -100,6 +102,7 @@ namespace NuGet.PackageManagement.UI
                 {
                     _installedVersion = value;
                     OnPropertyChanged(nameof(InstalledVersion));
+                    OnPropertyChanged(nameof(IsInstalledAndTransitive));
                     OnPropertyChanged(nameof(IsLatestInstalled));
 
                     // update tool tip
@@ -138,14 +141,16 @@ namespace NuGet.PackageManagement.UI
                     OnPropertyChanged(nameof(IsNotInstalled));
                     OnPropertyChanged(nameof(IsUpdateAvailable));
                     OnPropertyChanged(nameof(LatestVersion));
+                    OnPropertyChanged(nameof(IsUninstalledOrTransitive));
 
                     // update tool tip
                     if (_latestVersion != null)
                     {
                         var displayVersion = new DisplayVersion(_latestVersion, string.Empty);
+                        string toolTipText = PackageLevel == PackageLevel.Transitive ? Resources.ToolTip_TransitiveDependencyVersion : Resources.ToolTip_LatestVersion;
                         LatestVersionToolTip = string.Format(
                             CultureInfo.CurrentCulture,
-                            Resources.ToolTip_LatestVersion,
+                            toolTipText,
                             displayVersion);
                     }
                     else
@@ -270,6 +275,7 @@ namespace NuGet.PackageManagement.UI
                     OnPropertyChanged(nameof(IsUpdateAvailable));
                     OnPropertyChanged(nameof(IsUninstallable));
                     OnPropertyChanged(nameof(IsNotInstalled));
+                    OnPropertyChanged(nameof(IsUninstalledOrTransitive));
                 }
             }
         }
@@ -283,6 +289,10 @@ namespace NuGet.PackageManagement.UI
                 return (Status == PackageStatus.NotInstalled && LatestVersion != null);
             }
         }
+
+        public bool IsUninstalledOrTransitive => (Status == PackageStatus.NotInstalled && LatestVersion != null) || PackageLevel == PackageLevel.Transitive;
+
+        public bool IsInstalledAndTransitive => PackageLevel == PackageLevel.Transitive || InstalledVersion != null;
 
         // If the values that help calculate this property change, make sure you raise OnPropertyChanged for IsUninstallable
         // in all those properties.
@@ -394,6 +404,20 @@ namespace NuGet.PackageManagement.UI
             get => IsPackageDeprecated || IsPackageVulnerable;
         }
 
+        private bool _isPackageWithNetworkErrors;
+        public bool IsPackageWithNetworkErrors
+        {
+            get => _isPackageWithNetworkErrors;
+            set
+            {
+                if (IsPackageWithNetworkErrors != value)
+                {
+                    _isPackageWithNetworkErrors = value;
+                    OnPropertyChanged(nameof(IsPackageWithNetworkErrors));
+                }
+            }
+        }
+
         private Uri _iconUrl;
         public Uri IconUrl
         {
@@ -480,6 +504,8 @@ namespace NuGet.PackageManagement.UI
                 {
                     _packageLevel = value;
                     OnPropertyChanged(nameof(PackageLevel));
+                    OnPropertyChanged(nameof(IsUninstalledOrTransitive));
+                    OnPropertyChanged(nameof(IsInstalledAndTransitive));
                 }
             }
         }
@@ -487,7 +513,15 @@ namespace NuGet.PackageManagement.UI
         public async Task<IReadOnlyCollection<VersionInfoContextInfo>> GetVersionsAsync()
         {
             var identity = new PackageIdentity(Id, Version);
-            return await _searchService.GetPackageVersionsAsync(identity, Sources, IncludePrerelease, _cancellationTokenSource.Token);
+            var isTransitive = PackageLevel == PackageLevel.Transitive;
+            return await _searchService.GetPackageVersionsAsync(identity, Sources, IncludePrerelease, isTransitive, _cancellationTokenSource.Token);
+        }
+
+        public async Task<IReadOnlyCollection<VersionInfoContextInfo>> GetVersionsAsync(IEnumerable<IProjectContextInfo> projects)
+        {
+            var identity = new PackageIdentity(Id, Version);
+            var isTransitive = PackageLevel == PackageLevel.Transitive;
+            return await _searchService.GetPackageVersionsAsync(identity, Sources, IncludePrerelease, isTransitive, projects, _cancellationTokenSource.Token);
         }
 
         // This Lazy/AsyncLazy is just because DetailControlModel calls GetDetailedPackageSearchMetadataAsync directly,
@@ -691,6 +725,19 @@ namespace NuGet.PackageManagement.UI
             {
                 // UI requested cancellation
             }
+            catch (TaskCanceledException)
+            {
+                // HttpClient throws TaskCanceledExceptions for HTTP timeouts
+                try
+                {
+                    await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+                    IsPackageWithNetworkErrors = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // if cancellationToken cancelled before the above is scheduled on UI thread, don't log fault telemetry
+                }
+            }
         }
 
         private async Task ReloadPackageMetadataAsync()
@@ -713,6 +760,19 @@ namespace NuGet.PackageManagement.UI
             {
                 // UI requested cancellation.
             }
+            catch (TaskCanceledException)
+            {
+                // HttpClient throws TaskCanceledExceptions for HTTP timeouts
+                try
+                {
+                    await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+                    IsPackageWithNetworkErrors = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // if cancellationToken cancelled before the above is scheduled on UI thread, don't log fault telemetry
+                }
+            }
         }
 
         public void UpdatePackageStatus(IEnumerable<PackageCollectionItem> installedPackages)
@@ -732,6 +792,16 @@ namespace NuGet.PackageManagement.UI
             NuGetUIThreadHelper.JoinableTaskFactory
                 .RunAsync(ReloadPackageMetadataAsync)
                 .PostOnFailure(nameof(PackageItemViewModel), nameof(ReloadPackageMetadataAsync));
+
+            OnPropertyChanged(nameof(Status));
+        }
+
+        public void UpdateTransitivePackageStatus(NuGetVersion installedVersion)
+        {
+            InstalledVersion = installedVersion ?? throw new ArgumentNullException(nameof(installedVersion)); ;
+
+            // Transitive packages cannot be updated and can only be installed as top-level packages with their currently installed version.
+            LatestVersion = installedVersion;
 
             OnPropertyChanged(nameof(Status));
         }

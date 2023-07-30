@@ -1,9 +1,6 @@
-﻿<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>$(TargetFrameworksExeForSigning)</TargetFrameworks>
+    <TargetFrameworks>$(MinimalTargetFrameworksExeSigning)</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <Shipping>true</Shipping>
     <PackProject>true</PackProject>
@@ -17,6 +14,8 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <UsePublicApiAnalyzer>false</UsePublicApiAnalyzer>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(IsVsixBuild)' == 'true' ">
@@ -33,14 +32,21 @@
     <PackageReference Include="Microsoft.Build" ExcludeAssets="Runtime" />
     <PackageReference Include="Microsoft.Build.Tasks.Core" ExcludeAssets="Runtime" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" ExcludeAssets="Runtime" />
+    <!-- System.Security.Cryptography.Xml is a dependency of Microsoft.Build.Tasks.Core. Therefore, we have assigned the same ExcludeAssets value. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" ExcludeAssets="Runtime" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' ">
     <Reference Include="Microsoft.Build.Utilities.v4.0" Aliases="MicrosoftBuildUtilitiesv4" />
   </ItemGroup>
-
+  
+  <ItemGroup Condition=" '$(IsCore)' == 'true' ">
+    <PackageReference Include="System.Security.Cryptography.Pkcs" ExcludeAssets="Compile"/>
+  </ItemGroup>
+  
   <ItemGroup>
     <None Include="App.config" Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' " />
+    <None Include="app.manifest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -57,7 +63,4 @@
       <TfmSpecificPackageFile Include="$(ProjectRuntimeConfigFilePath)" Condition=" '$(IsCore)' == 'true' " PackagePath="contentFiles\any\$(TargetFramework)" PackageCopyToOutput="true" />
     </ItemGroup>
   </Target>
-
-  <Import Project="$(BuildCommonDirectory)common.targets" />
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>
