@@ -3,8 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -13,7 +11,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Packaging;
@@ -94,7 +91,7 @@ namespace NuGet.Protocol.Core.Types
 
                         await PushSymbolsPath(packagePath, symbolSource, symbolApiKey,
                             noServiceEndpoint, skipDuplicate, symbolPackageUpdateResource,
-                            requestTimeout, log, explicitSymbolsPush: true, tokenSource.Token);
+                            requestTimeout, log, tokenSource.Token);
                     }
                 }
             }
@@ -160,6 +157,7 @@ namespace NuGet.Protocol.Core.Types
             if (confirm(string.Format(CultureInfo.CurrentCulture, Strings.DeleteCommandConfirm, packageId, packageVersion, sourceDisplayName)))
             {
                 log.LogWarning(string.Format(
+                    CultureInfo.CurrentCulture,
                     Strings.DeleteCommandDeletingPackage,
                     packageId,
                     packageVersion,
@@ -185,7 +183,6 @@ namespace NuGet.Protocol.Core.Types
             SymbolPackageUpdateResourceV3 symbolPackageUpdateResource,
             TimeSpan requestTimeout,
             ILogger log,
-            bool explicitSymbolsPush,
             CancellationToken token)
         {
             bool isSymbolEndpointSnupkgCapable = symbolPackageUpdateResource != null;
@@ -198,12 +195,9 @@ namespace NuGet.Protocol.Core.Types
             //No files were resolved.
             if (!symbolsPathResolved)
             {
-                if (explicitSymbolsPush)
-                {
-                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture,
-                        Strings.UnableToFindFile,
-                        packagePath));
-                }
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture,
+                    Strings.UnableToFindFile,
+                    packagePath));
             }
             else
             {
@@ -217,10 +211,11 @@ namespace NuGet.Protocol.Core.Types
                         Path.GetFileName(symbolPackagePath),
                         Strings.DefaultSymbolServer));
                 }
-
+                bool warnForHttpSources = true;
                 foreach (string packageToPush in symbolsToPush)
                 {
-                    await PushPackageCore(symbolSource, apiKey, packageToPush, noServiceEndpoint, skipDuplicate, requestTimeout, log, token);
+                    await PushPackageCore(symbolSource, apiKey, packageToPush, noServiceEndpoint, skipDuplicate, requestTimeout, warnForHttpSources, log, token);
+                    warnForHttpSources = false;
                 }
             }
         }
@@ -259,11 +254,10 @@ namespace NuGet.Protocol.Core.Types
                     Strings.NoApiKeyFound,
                     GetSourceDisplayName(source)));
             }
-
+            bool warnForHttpSources = true;
             foreach (string nupkgToPush in nupkgsToPush)
             {
-                bool packageWasPushed = await PushPackageCore(source, apiKey, nupkgToPush, noServiceEndpoint, skipDuplicate, requestTimeout, log, token);
-
+                bool packageWasPushed = await PushPackageCore(source, apiKey, nupkgToPush, noServiceEndpoint, skipDuplicate, requestTimeout, warnForHttpSources, log, token);
                 // Push corresponding symbols, if successful.
                 if (packageWasPushed && !string.IsNullOrEmpty(symbolSource))
                 {
@@ -293,8 +287,9 @@ namespace NuGet.Protocol.Core.Types
                     }
 
                     string symbolApiKey = getSymbolApiKey(symbolSource);
-                    await PushPackageCore(symbolSource, symbolApiKey, symbolPackagePath, noServiceEndpoint, skipDuplicate, requestTimeout, log, token);
+                    await PushPackageCore(symbolSource, symbolApiKey, symbolPackagePath, noServiceEndpoint, skipDuplicate, requestTimeout, warnForHttpSources, log, token);
                 }
+                warnForHttpSources = false;
             }
         }
 
@@ -304,6 +299,7 @@ namespace NuGet.Protocol.Core.Types
             bool noServiceEndpoint,
             bool skipDuplicate,
             TimeSpan requestTimeout,
+            bool warnForHttpSources,
             ILogger log,
             CancellationToken token)
         {
@@ -324,7 +320,7 @@ namespace NuGet.Protocol.Core.Types
             else
             {
                 wasPackagePushed = await PushPackageToServer(source, apiKey, packageToPush, noServiceEndpoint, skipDuplicate,
-                    requestTimeout, log, token);
+                    requestTimeout, warnForHttpSources, log, token);
             }
 
             if (wasPackagePushed)
@@ -341,10 +337,7 @@ namespace NuGet.Protocol.Core.Types
             {
                 return Strings.LiveFeed + " (" + NuGetConstants.DefaultGalleryServerUrl + ")";
             }
-            if (source.Equals(NuGetConstants.DefaultSymbolServerUrl, StringComparison.OrdinalIgnoreCase))
-            {
-                return Strings.DefaultSymbolServer + " (" + NuGetConstants.DefaultSymbolServerUrl + ")";
-            }
+
             return "'" + source + "'";
         }
 
@@ -376,6 +369,7 @@ namespace NuGet.Protocol.Core.Types
             bool noServiceEndpoint,
             bool skipDuplicate,
             TimeSpan requestTimeout,
+            bool warnForHttpSources,
             ILogger logger,
             CancellationToken token)
         {
@@ -383,6 +377,10 @@ namespace NuGet.Protocol.Core.Types
             bool useTempApiKey = IsSourceNuGetSymbolServer(source);
             HttpStatusCode? codeNotToThrow = ConvertSkipDuplicateParamToHttpStatusCode(skipDuplicate);
             bool showPushCommandPackagePushed = true;
+            if (warnForHttpSources && serviceEndpointUrl.Scheme == Uri.UriSchemeHttp)
+            {
+                logger.LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "push", serviceEndpointUrl));
+            }
 
             if (useTempApiKey)
             {
@@ -415,7 +413,7 @@ namespace NuGet.Protocol.Core.Types
                                     bool logOccurred = DetectAndLogSkippedErrorOccurrence(responseStatusCode, source, pathToPackage, response.ReasonPhrase, logger);
                                     showPushCommandPackagePushed = !logOccurred;
 
-                                    return Task.FromResult(0);
+                                    return TaskResult.Zero;
                                 },
                                 logger,
                                 token);
@@ -457,7 +455,7 @@ namespace NuGet.Protocol.Core.Types
                         bool logOccurred = DetectAndLogSkippedErrorOccurrence(responseStatusCode, source, pathToPackage, response.ReasonPhrase, logger);
                         showPushCommandPackagePushed = !logOccurred;
 
-                        return Task.FromResult(0);
+                        return TaskResult.Zero;
                     },
                     logger,
                     token);
@@ -680,6 +678,10 @@ namespace NuGet.Protocol.Core.Types
             }
             else
             {
+                if (sourceUri.Scheme == Uri.UriSchemeHttp)
+                {
+                    logger.LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "delete", sourceUri));
+                }
                 await DeletePackageFromServer(source, apiKey, packageId, packageVersion, noServiceEndpoint, logger, token);
             }
         }
@@ -722,7 +724,7 @@ namespace NuGet.Protocol.Core.Types
                 {
                     response.EnsureSuccessStatusCode();
 
-                    return Task.FromResult(0);
+                    return TaskResult.Zero;
                 },
                 logger,
                 token);
@@ -855,7 +857,7 @@ namespace NuGet.Protocol.Core.Types
                 return apiKey;
             }
             var serviceEndpointUrl = GetServiceEndpointUrl(NuGetConstants.DefaultGalleryServerUrl,
-                string.Format(TempApiKeyServiceEndpoint, packageIdentity.Id, packageIdentity.Version), noServiceEndpoint);
+                string.Format(CultureInfo.InvariantCulture, TempApiKeyServiceEndpoint, packageIdentity.Id, packageIdentity.Version), noServiceEndpoint);
 
             try
             {

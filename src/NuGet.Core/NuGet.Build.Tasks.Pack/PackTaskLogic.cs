@@ -38,7 +38,7 @@ namespace NuGet.Build.Tasks.Pack
                 BasePath = request.NuspecBasePath,
                 NoPackageAnalysis = request.NoPackageAnalysis,
                 NoDefaultExcludes = request.NoDefaultExcludes,
-                WarningProperties = WarningProperties.GetWarningProperties(request.TreatWarningsAsErrors, request.WarningsAsErrors, request.NoWarn),
+                WarningProperties = WarningProperties.GetWarningProperties(request.TreatWarningsAsErrors, request.WarningsAsErrors, request.NoWarn, request.WarningsNotAsErrors),
                 PackTargetArgs = new MSBuildPackTargetArgs()
             };
 
@@ -232,7 +232,7 @@ namespace NuGet.Build.Tasks.Pack
                 aliases[tfm.TargetAlias] = tfm.FrameworkName.GetShortFolderName();
             }
 
-            var nuGetFrameworkComparer = new NuGetFrameworkFullComparer();
+            var nuGetFrameworkComparer = NuGetFrameworkFullComparer.Instance;
             var frameworksWithSuppressedDependencies = new HashSet<NuGetFramework>(nuGetFrameworkComparer);
             if (request.FrameworksWithSuppressedDependencies != null && request.FrameworksWithSuppressedDependencies.Any())
             {
@@ -996,7 +996,7 @@ namespace NuGet.Build.Tasks.Pack
             var dictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in properties)
             {
-                var index = item.IndexOf("=");
+                var index = item.IndexOf("=", StringComparison.Ordinal);
                 // Make sure '=' is not the first or the last character of the string
                 if (index > 0 && index < item.Length - 1)
                 {

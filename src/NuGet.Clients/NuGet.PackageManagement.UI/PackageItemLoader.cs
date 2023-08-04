@@ -202,9 +202,6 @@ namespace NuGet.PackageManagement.UI
         public async Task UpdateStateAsync(IProgress<IItemLoaderState> progress, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            progress?.Report(_state);
-
             SearchResultContextInfo searchResult = await _searchService.RefreshSearchAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await UpdateStateAndReportAsync(searchResult, progress, cancellationToken);
@@ -264,16 +261,23 @@ namespace NuGet.PackageManagement.UI
             foreach (PackageSearchMetadataContextInfo metadata in _state.Results.PackageSearchItems)
             {
                 VersionRange allowedVersions = VersionRange.All;
+                VersionRange versionOverride = null;
 
                 // get the allowed version range and pass it to package item view model to choose the latest version based on that
                 if (_packageReferences != null)
                 {
                     IEnumerable<IPackageReferenceContextInfo> matchedPackageReferences = _packageReferences.Where(r => StringComparer.OrdinalIgnoreCase.Equals(r.Identity.Id, metadata.Identity.Id));
                     VersionRange[] allowedVersionsRange = matchedPackageReferences.Select(r => r.AllowedVersions).Where(v => v != null).ToArray();
+                    VersionRange[] versionOverrides = matchedPackageReferences.Select(r => r.VersionOverride).Where(v => v != null).ToArray();
 
                     if (allowedVersionsRange.Length > 0)
                     {
                         allowedVersions = allowedVersionsRange[0];
+                    }
+
+                    if (versionOverrides.Length > 0)
+                    {
+                        versionOverride = versionOverrides[0];
                     }
                 }
 
@@ -282,7 +286,7 @@ namespace NuGet.PackageManagement.UI
                 var transitiveToolTipMessage = string.Empty;
                 if (packageLevel == PackageLevel.Transitive)
                 {
-                    transitiveToolTipMessage = string.Format(CultureInfo.CurrentUICulture, Resources.PackageVersionWithTransitiveOrigins, metadata.Identity.Version, string.Join(", ", metadata.TransitiveOrigins));
+                    transitiveToolTipMessage = string.Format(CultureInfo.CurrentCulture, Resources.PackageVersionWithTransitiveOrigins, metadata.Identity.Version, string.Join(", ", metadata.TransitiveOrigins));
                 }
 
                 var listItem = new PackageItemViewModel(_searchService)
@@ -294,6 +298,7 @@ namespace NuGet.PackageManagement.UI
                     DownloadCount = metadata.DownloadCount,
                     Summary = metadata.Summary,
                     AllowedVersions = allowedVersions,
+                    VersionOverride = versionOverride,
                     PrefixReserved = metadata.PrefixReserved && !IsMultiSource,
                     Recommended = metadata.IsRecommended,
                     RecommenderVersion = metadata.RecommenderVersion,
@@ -306,7 +311,14 @@ namespace NuGet.PackageManagement.UI
                     TransitiveToolTipMessage = transitiveToolTipMessage,
                 };
 
-                listItem.UpdatePackageStatus(_installedPackages);
+                if (packageLevel == PackageLevel.TopLevel)
+                {
+                    listItem.UpdatePackageStatus(_installedPackages);
+                }
+                else
+                {
+                    listItem.UpdateTransitivePackageStatus(metadata.Identity.Version);
+                }
 
                 listItemViewModels.Add(listItem);
             }

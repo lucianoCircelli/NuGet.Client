@@ -120,6 +120,8 @@ namespace NuGet.DependencyResolver.Core.Tests
 
             public PackageSource Source => new PackageSource("Test");
 
+            public SourceRepository SourceRepository => throw new NotImplementedException();
+
             public async Task<LibraryIdentity> FindLibraryAsync(
                 LibraryRange libraryRange,
                 NuGetFramework targetFramework,
@@ -129,7 +131,7 @@ namespace NuGet.DependencyResolver.Core.Tests
             {
                 if (_delay != TimeSpan.Zero)
                 {
-                    await Task.Delay(_delay);
+                    await Task.Delay(_delay, cancellationToken);
                 }
 
                 return _libraries.FindBestMatch(libraryRange.VersionRange, l => l?.Version);

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
@@ -26,7 +27,7 @@ namespace Test.Utility.Signing
 {
     public static class SigningTestUtility
     {
-        private static readonly string _signatureLogPrefix = "Package '{0} {1}' from source '{2}':";
+        private static readonly string SignatureLogPrefix = "Package '{0} {1}' from source '{2}':";
 
         /// <summary>
         /// Modification generator that can be passed to TestCertificate.Generate().
@@ -169,7 +170,8 @@ namespace Test.Utility.Signing
                         IsCA = true
                     };
 
-                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.Root);
+                    cert = TestCertificate.Generate(X509StorePurpose.CodeSigning, actionGenerator, chainCertificateRequest)
+                        .WithPrivateKeyAndTrust(StoreName.Root);
                     issuer = cert;
                 }
                 else if (i < length - 1) // intermediate CA cert
@@ -183,7 +185,8 @@ namespace Test.Utility.Signing
                         Issuer = issuer.Source.Cert
                     };
 
-                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrustForIntermediateCertificateAuthority();
+                    cert = TestCertificate.Generate(X509StorePurpose.CodeSigning, actionGenerator, chainCertificateRequest)
+                        .WithPrivateKeyAndTrustForIntermediateCertificateAuthority();
                     issuer = cert;
                 }
                 else // leaf cert
@@ -197,13 +200,115 @@ namespace Test.Utility.Signing
                         Issuer = issuer.Source.Cert
                     };
 
-                    cert = TestCertificate.Generate(leafGenerator, chainCertificateRequest).WithPrivateKeyAndTrustForLeafOrSelfIssued();
+                    cert = TestCertificate.Generate(X509StorePurpose.CodeSigning, leafGenerator, chainCertificateRequest)
+                        .WithPrivateKeyAndTrustForLeafOrSelfIssued();
                 }
 
                 certChain.Add(cert);
             }
 
             return certChain;
+        }
+
+        public static IX509CertificateChain GenerateCertificateChainWithoutTrust(
+            int length,
+            string crlServerUri,
+            string crlLocalUri,
+            bool configureLeafCrl = true,
+            Action<TestCertificateGenerator> leafCertificateActionGenerator = null,
+            bool revokeEndCertificate = false)
+        {
+            List<TestCertificate> testCertificates = new();
+            X509CertificateChain certificateChain = new();
+            Action<TestCertificateGenerator> actionGenerator = CertificateModificationGeneratorForCodeSigningEkuCert;
+            Action<TestCertificateGenerator> leafGenerator = leafCertificateActionGenerator ?? actionGenerator;
+            X509Certificate2 issuer = null;
+            X509Certificate2 certificate = null;
+            CertificateRevocationList crl = null;
+
+            for (var i = 0; i < length; i++)
+            {
+                TestCertificate testCertificate;
+
+                if (i == 0) // root CA cert
+                {
+                    ChainCertificateRequest chainCertificateRequest = new()
+                    {
+                        ConfigureCrl = true,
+                        CrlLocalBaseUri = crlLocalUri,
+                        CrlServerBaseUri = crlServerUri,
+                        IsCA = true
+                    };
+
+                    testCertificate = TestCertificate.Generate(
+                        X509StorePurpose.CodeSigning,
+                        actionGenerator,
+                        chainCertificateRequest);
+
+                    testCertificates.Add(testCertificate);
+
+                    issuer = certificate = testCertificate.PublicCertWithPrivateKey;
+                }
+                else if (i < length - 1) // intermediate CA cert
+                {
+                    ChainCertificateRequest chainCertificateRequest = new ChainCertificateRequest()
+                    {
+                        ConfigureCrl = true,
+                        CrlLocalBaseUri = crlLocalUri,
+                        CrlServerBaseUri = crlServerUri,
+                        IsCA = true,
+                        Issuer = issuer
+                    };
+
+                    testCertificate = TestCertificate.Generate(
+                        X509StorePurpose.CodeSigning,
+                        actionGenerator,
+                        chainCertificateRequest);
+
+                    testCertificates.Add(testCertificate);
+
+                    issuer = certificate = testCertificate.PublicCertWithPrivateKey;
+
+                    if (revokeEndCertificate)
+                    {
+                        crl = testCertificate.Crl;
+                    }
+                }
+                else // leaf cert
+                {
+                    ChainCertificateRequest chainCertificateRequest = new()
+                    {
+                        CrlLocalBaseUri = crlLocalUri,
+                        CrlServerBaseUri = crlServerUri,
+                        IsCA = false,
+                        ConfigureCrl = configureLeafCrl,
+                        Issuer = issuer
+                    };
+
+                    testCertificate = TestCertificate.Generate(
+                        X509StorePurpose.CodeSigning,
+                        leafGenerator,
+                        chainCertificateRequest);
+
+                    certificate = testCertificate.PublicCertWithPrivateKey;
+
+                    if (revokeEndCertificate)
+                    {
+                        testCertificates[testCertificates.Count - 1].Crl.RevokeCertificate(certificate);
+                    }
+
+                    testCertificates.Add(testCertificate);
+                }
+
+                certificateChain.Insert(index: 0, certificate);
+            }
+
+            foreach (TestCertificate testCertificate in testCertificates)
+            {
+                testCertificate.Cert.Dispose();
+            }
+
+            return certificateChain;
         }
 
         public static X509CertificateWithKeyInfo GenerateCertificateWithKeyInfo(
@@ -569,7 +674,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust();
+            return TestCertificate.Generate(X509StorePurpose.CodeSigning, actionGenerator).WithTrust();
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateExpired()
@@ -579,7 +684,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust();
+            return TestCertificate.Generate(X509StorePurpose.CodeSigning, actionGenerator).WithTrust();
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateNotYetValid()
@@ -589,7 +694,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust();
+            return TestCertificate.Generate(X509StorePurpose.CodeSigning, actionGenerator).WithTrust();
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateThatWillExpireSoon(TimeSpan expiresIn)
@@ -599,7 +704,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust();
+            return TestCertificate.Generate(X509StorePurpose.CodeSigning, actionGenerator).WithTrust();
         }
 
         public static bool AreVerifierSettingsEqual(SignedPackageVerifierSettings first, SignedPackageVerifierSettings second)
@@ -691,7 +796,7 @@ namespace Test.Utility.Signing
             bool isOfflineRevocation = issues.Any(issue =>
                 issue.Code == NuGetLogCode.NU3018 &&
                 issue.Level == logLevel &&
-                issue.Message.Split(new[] { ' ', ':' }).Where(WORDEXTFLAGS => WORDEXTFLAGS == offlineRevocation).Any());
+                issue.Message.Split(new[] { ' ', ':' }).Any(WORDEXTFLAGS => WORDEXTFLAGS == offlineRevocation));
 
             Assert.True(isOfflineRevocation);
         }
@@ -736,7 +841,7 @@ namespace Test.Utility.Signing
             bool isRevocationStatusUnknown = issues.Any(issue =>
                 issue.Code == code &&
                 issue.Level == logLevel &&
-                issue.Message.Split(new[] { ' ', ':' }).Where(WORDEXTFLAGS => WORDEXTFLAGS == revocationStatusUnknown).Any());
+                issue.Message.Split(new[] { ' ', ':' }).Any(WORDEXTFLAGS => WORDEXTFLAGS == revocationStatusUnknown));
 
             Assert.True(isRevocationStatusUnknown);
         }
@@ -749,9 +854,18 @@ namespace Test.Utility.Signing
                 issue.Code == code &&
                 issue.Level == logLevel &&
                 (issue.Message.Contains("certificate is not trusted by the trust provider") ||
-                    issue.Message.Split(new[] { ' ', ':' }).Where(WORDEXTFLAGS => WORDEXTFLAGS == untrustedRoot).Any()));
+                 issue.Message.Split(new[] { ' ', ':' }).Any(WORDEXTFLAGS => WORDEXTFLAGS == untrustedRoot)));
 
             Assert.True(isUntrustedRoot);
+
+#if NET5_0_OR_GREATER
+            if (!RuntimeEnvironmentHelper.IsWindows)
+            {
+                bool hasNU3042 = issues.Any(issue => issue.Code == NuGetLogCode.NU3042);
+
+                Assert.True(hasNU3042);
+            }
+#endif
         }
 
         public static void AssertUntrustedRoot(IEnumerable<ILogMessage> issues, LogLevel logLevel)
@@ -766,14 +880,14 @@ namespace Test.Utility.Signing
             bool isNotTimeValid = issues.Any(issue =>
                 issue.Code == NuGetLogCode.NU3018 &&
                 issue.Level == logLevel &&
-                issue.Message.Split(new[] { ' ', ':' }).Where(WORDEXTFLAGS => WORDEXTFLAGS == notTimeValid).Any());
+                issue.Message.Split(new[] { ' ', ':' }).Any(WORDEXTFLAGS => WORDEXTFLAGS == notTimeValid));
 
             Assert.True(isNotTimeValid);
         }
 
         public static string AddSignatureLogPrefix(string log, PackageIdentity package, string source)
         {
-            return $"{string.Format(_signatureLogPrefix, package.Id, package.Version, source)} {log}";
+            return $"{string.Format(CultureInfo.CurrentCulture, SignatureLogPrefix, package.Id, package.Version, source)} {log}";
         }
     }
 }

@@ -151,6 +151,15 @@ namespace NuGet.Configuration {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to PackageSourceMapping is enabled and there are multiple package sources associated with the same key(s): {0}. Path: {1}.
+        /// </summary>
+        internal static string Error_DuplicatePackageSource {
+            get {
+                return ResourceManager.GetString("Error_DuplicatePackageSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Encryption is not supported on non-Windows platforms..
         /// </summary>
         internal static string Error_EncryptionUnsupported {
@@ -390,6 +399,15 @@ namespace NuGet.Configuration {
         internal static string ShowError_CannotHaveChildren {
             get {
                 return ResourceManager.GetString("ShowError_CannotHaveChildren", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot update package sources, config file contains a duplicated key &apos;{0}&apos; in the disabled package sources section. Path: &apos;{1}&apos;.
+        /// </summary>
+        internal static string ShowError_ConfigDuplicateDisabledSources {
+            get {
+                return ResourceManager.GetString("ShowError_ConfigDuplicateDisabledSources", resourceCulture);
             }
         }
         

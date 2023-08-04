@@ -2,14 +2,14 @@
 
 ## Prerequisites
 
-- [Visual Studio 2019](https://www.visualstudio.com)
+- [Visual Studio 2022 17.4 or above](https://www.visualstudio.com)
   with following workloads:
   - .NET Core Cross Platform Development
   - .NET desktop development
   - Visual Studio extension development.
   - Desktop development with C++
 - [Windows 10 SDK](https://developer.microsoft.com/windows/downloads/windows-10-sdk/)
-- [.NET 5.0 SDK](https://dotnet.microsoft.com/download/dotnet/5.0)
+- [.NET 7.0 SDK](https://dotnet.microsoft.com/download/dotnet/7.0)
 - Git
 - Windows Powershell v3.0+
 
@@ -22,7 +22,7 @@
 1. Make your change. Please name your branch `dev-<userid>-<very-short-title>`.
 1. Add tests.
     * [Testing in .NET](https://docs.microsoft.com/en-us/dotnet/core/testing/)
-    * [Testing tools in Visual Studio](https://docs.microsoft.com/visualstudio/test/?view=vs-2019)
+    * [Testing tools in Visual Studio](https://docs.microsoft.com/visualstudio/test/)
 1. Create a [pull request](https://github.com/NuGet/NuGet.Client/pulls).
     * Create a new issue if you cannot find an existing one [NuGet/Home](https://github.com/NuGet/Home/issues). 
     * Keep the pull request template, and link to an issue. 
@@ -92,13 +92,13 @@ NuGet members may contribute directly to the main remote.
     `.\runTests.ps1`
 
 1. Run dotnet code formatters and correct any errors.
-    * You can use `Format Document` in VS: 
+    - You can use `Format Document` in VS:
 
-       `Ctrl+K, Ctrl+D` or Edit > Advanced > Format Document (https://docs.microsoft.com/visualstudio/ide/default-keyboard-shortcuts-in-visual-studio?view=vs-2019#text-editor)
+       `Ctrl+K, Ctrl+D` or Edit > Advanced > Format Document (https://learn.microsoft.com/visualstudio/ide/default-keyboard-shortcuts-in-visual-studio#bkmk_text-editor-context-specific-shortcuts)
 
-    * You can use the dotnet CLI tool (https://github.com/dotnet/format):
+    - You can use the dotnet CLI tool (https://learn.microsoft.com/dotnet/core/tools/dotnet-format):
 
-      `dotnet format --check --exclude cli packages submodules`
+      `dotnet format whitespace --verify-no-changes NuGet.sln`
 
 ### Notable `build.ps1` switches
 
@@ -117,6 +117,7 @@ NuGet members may contribute directly to the main remote.
 
 - [Workflow](docs/workflow.md)
 - [Coding Guidelines](docs/coding-guidelines.md)
+- [UI Guidelines](docs/ui-guidelines.md)
 - [Project Overview](docs/project-overview.md)
 - [Debugging](docs/debugging.md)
 - [New Feature Guide](docs/feature-guide.md)

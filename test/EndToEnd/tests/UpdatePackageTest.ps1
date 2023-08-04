@@ -345,6 +345,7 @@ function Test-SubTreeUpdateWithConflict {
 }
 
 function Test-AddingBindingRedirectAfterUpdate {
+    [SkipTest('https://github.com/NuGet/Home/issues/12292')]
     param(
         $context
     )
@@ -632,10 +633,8 @@ function Test-UpdateAllPackagesInSolution {
 }
 
 function Test-UpdatePackageOnAnFSharpProjectWithMultiplePackages {
-    [SkipTest('https://github.com/dotnet/fsharp/issues/12835')]
-    param(
-        $context
-    )
+    [SkipTest('https://github.com/NuGet/Home/issues/11982')]
+    param($context)
 
     # Arrange
     $p = New-FSharpLibrary
@@ -1744,6 +1743,7 @@ function Test-UpdatePackageWithToHighestMinorFlag {
 }
 
 function Test-UpdatingBindingRedirectAfterUpdate {
+    [SkipTest('https://github.com/NuGet/Home/issues/12292')]
     param(
         $context
     )

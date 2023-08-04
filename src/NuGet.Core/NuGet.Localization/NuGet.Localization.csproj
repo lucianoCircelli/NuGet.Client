@@ -1,7 +1,4 @@
-<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>$(NetStandardVersion)</TargetFramework>
     <Shipping>true</Shipping>
@@ -36,7 +33,7 @@
     <MakeDir
             Directories="$(LocalizationOutputDirectory)"/>
     <ItemGroup>
-      <LocalizationProjects Include="@(SolutionProjectsWithoutVSIX)" Exclude="$(NuGetCoreSrcDirectory)NuGet.Build.Tasks.Pack\NuGet.Build.Tasks.Pack.csproj"/>
+      <LocalizationProjects Include="@(SolutionProjectsWithoutVSIX)" Exclude="..\NuGet.Build.Tasks.Pack\NuGet.Build.Tasks.Pack.csproj"/>
     </ItemGroup>
     <Message Text="Localization Projects: @(LocalizationProjects, '%0a')" Importance="High" />
     <MSBuild Projects="@(LocalizationProjects)"
@@ -57,7 +54,4 @@
 
     <Copy SourceFiles="@(_LocalizedFilePaths->'%(Identity)')" DestinationFiles="@(_LocalizedFilePaths->'%(TargetPath)')" />
   </Target>
-
-  <Import Project="$(BuildCommonDirectory)common.targets"/>
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

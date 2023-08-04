@@ -1,6 +1,5 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -11,9 +10,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Newtonsoft.Json.Linq;
+using NuGet.Common;
+using NuGet.Packaging;
 using NuGet.Packaging.Core;
+using NuGet.Protocol;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -65,11 +68,6 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(pathContext.SolutionRoot, "packages.config", doc.ToString());
 
-                // Prepare sources for NuGet.Config file (2 steps)
-                var serverRepo = new LocalPackageRepository(repositoryPath1);
-                var server2Repo = new LocalPackageRepository(repositoryPath2);
-                var allPackageRepo = new LocalPackageRepository(allRepo);
-
                 // step1: Server setup
                 var indexJson = Util.CreateIndexJson();
                 var indexJson2 = Util.CreateIndexJson();
@@ -84,12 +82,12 @@ namespace NuGet.CommandLine.Test
 
                 server1.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server1, indexJson, serverRepo);
+                    return ServerHandler(request, hitsByUrl, server1, indexJson, repositoryPath1);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, server2Repo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath2);
                 });
 
                 server1.Start();
@@ -118,14 +116,12 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
-                var packagesFolder = new LocalPackageRepository(packagesFolderPath);
-                var allPackages = packagesFolder.GetPackages().ToList();
+                var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
 
                 // Assert
-                Assert.True(0 != r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 != r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(100, hitsByUrl2.Keys.Count(s => s.StartsWith("/nuget/Packages")));
@@ -208,11 +204,6 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(pathContext.SolutionRoot, "packages.config", doc.ToString());
 
-                // Prepare sources for NuGet.Config file (2 steps)
-                var serverRepo = new LocalPackageRepository(repositoryPath);
-                var server2Repo = new LocalPackageRepository(repositoryPath2);
-                var allPackageRepo = new LocalPackageRepository(allRepo);
-
                 // Step1: Server setup
                 var indexJson = Util.CreateIndexJson();
                 var indexJson2 = Util.CreateIndexJson();
@@ -227,12 +218,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, serverRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, server2Repo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath2);
                 });
 
                 server.Start();
@@ -261,14 +252,12 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
-                var packagesFolder = new LocalPackageRepository(packagesFolderPath);
-                var allPackages = packagesFolder.GetPackages().ToList();
+                var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
 
                 // Assert
-                Assert.True(0 != r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 != r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(1, hitsByUrl["/index.json"]);
 
@@ -276,8 +265,8 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Id == package.Id
-                        && p.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
                 }
             }
         }
@@ -347,10 +336,6 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(pathContext.SolutionRoot, "packages.config", doc.ToString());
 
-                // Prepare sources for NuGet.Config file (2 steps)
-                var serverRepo = new LocalPackageRepository(repositoryPath);
-                var server2Repo = new LocalPackageRepository(repositoryPath2);
-
                 // Step1: Server setup
                 var indexJson = Util.CreateIndexJson();
                 var indexJson2 = Util.CreateIndexJson();
@@ -365,12 +350,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, serverRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, server2Repo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath2);
                 });
 
                 server.Start();
@@ -399,21 +384,19 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
-                var packagesFolder = new LocalPackageRepository(packagesFolderPath);
-                var allPackages = packagesFolder.GetPackages().ToList();
+                var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(testCount, allPackages.Count());
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Id == package.Id
-                        && p.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
                 }
             }
         }
@@ -482,10 +465,6 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(pathContext.SolutionRoot, "packages.config", doc.ToString());
 
-                // Prepare sources for NuGet.Config file (2 steps)
-                var serverRepo = new LocalPackageRepository(repositoryPath);
-                var server2Repo = new LocalPackageRepository(repositoryPath2);
-
                 // Step1: Server setup
                 var indexJson = Util.CreateIndexJson();
                 var indexJson2 = Util.CreateIndexJson();
@@ -500,12 +479,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, serverRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, server2Repo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath2);
                 });
 
                 server.Start();
@@ -534,21 +513,19 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
-                var packagesFolder = new LocalPackageRepository(packagesFolderPath);
-                var allPackages = packagesFolder.GetPackages().ToList();
+                var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(testCount, allPackages.Count());
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Id == package.Id
-                        && p.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
                 }
             }
         }
@@ -566,7 +543,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 var packagesFolder = pathContext.PackagesV2;
                 Directory.CreateDirectory(packagesFolder);
@@ -590,12 +566,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo, v2ResetEvent, v3ResetEvent);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath, v2ResetEvent, v3ResetEvent);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, localRepo, v2ResetEvent, v3ResetEvent);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath, v2ResetEvent, v3ResetEvent);
                 });
 
                 server.Start();
@@ -635,8 +611,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 task.Wait();
 
@@ -649,7 +624,7 @@ namespace NuGet.CommandLine.Test
                     .Count();
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(3, packagesFolderCount);   // project.json packages still go here
                 Assert.Equal(6, globalFolderCount);
@@ -669,7 +644,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 var packagesFolder = pathContext.PackagesV2;
                 Directory.CreateDirectory(packagesFolder);
@@ -688,12 +662,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo, v2ResetEvent, v3ResetEvent);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath, v2ResetEvent, v3ResetEvent);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson, localRepo, v2ResetEvent, v3ResetEvent);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson, repositoryPath, v2ResetEvent, v3ResetEvent);
                 });
 
                 server.Start();
@@ -734,7 +708,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: int.MaxValue);
 
                 task.Wait();
@@ -748,7 +721,7 @@ namespace NuGet.CommandLine.Test
                     .Count();
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(3, packagesFolderCount);
                 Assert.Equal(6, globalFolderCount);
@@ -768,7 +741,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -785,12 +757,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, localRepo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath);
                 });
 
                 server.Start();
@@ -820,21 +792,20 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Network calls can happen multiple times here with cancelation
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(2 >= hitsByUrl[url], url + " " + hitsByUrl[url]);
+                    Assert.True(2 >= hits, url + " " + hits);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(2 >= hitsByUrl2[url], url + " " + hitsByUrl2[url]);
+                    Assert.True(2 >= hits, url + " " + hits);
                 }
             }
         }
@@ -851,12 +822,11 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
 
-                var packageA = Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
+                Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -867,7 +837,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -900,15 +870,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -925,12 +894,11 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
 
-                var packageA = Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
+                Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -941,7 +909,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -974,17 +942,16 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(1, hitsByUrl["/reg/packagea/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1001,12 +968,11 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
 
-                var packageA = Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
+                Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1017,7 +983,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1048,15 +1014,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1073,12 +1038,11 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
 
-                var packageA = Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
+                Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1089,7 +1053,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1120,17 +1084,16 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(1, hitsByUrl["/reg/packagea/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1146,9 +1109,7 @@ namespace NuGet.CommandLine.Test
                 var workingPath = pathContext.WorkingDirectory;
                 CreateMixedConfigAndJson(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
-
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1160,12 +1121,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1195,11 +1156,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Equal(1, hitsByUrl["/index.json"]);
             }
@@ -1218,7 +1178,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1230,12 +1189,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1265,20 +1224,19 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url + " hits: " + hitsByUrl[url]);
+                    Assert.True(1 == hits, url + " hits: " + hits);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(1 == hitsByUrl2[url], url + " hits: " + hitsByUrl2[url]);
+                    Assert.True(1 == hits, url + " hits: " + hits);
                 }
             }
         }
@@ -1296,7 +1254,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1313,12 +1270,12 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server2.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, localRepo);
+                    return ServerHandler(request, hitsByUrl2, server2, indexJson2, repositoryPath);
                 });
 
                 server.Start();
@@ -1348,20 +1305,19 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(1 == hitsByUrl2[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1378,7 +1334,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1388,7 +1343,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1417,19 +1372,17 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
 
                 // PackageE is hit twice, once from packages.config and the other from project.json.
                 // The rest should only be hit once.
-                foreach (var url in hitsByUrl.Keys.Where(s => s != "/reg/packagee/index.json"))
+                foreach ((var url, var hits) in hitsByUrl.Where(s => s.Key != "/reg/packagee/index.json"))
                 {
-                    var hits = hitsByUrl[url];
-                    Assert.True(1 == hits, url + $" was hit {hitsByUrl[url]} times instead of 1");
+                    Assert.True(1 == hits, url + $" was hit {hits} times instead of 1");
                 }
             }
         }
@@ -1446,7 +1399,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1457,7 +1409,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1486,16 +1438,15 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1512,7 +1463,6 @@ namespace NuGet.CommandLine.Test
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
-                var localRepo = new LocalPackageRepository(repositoryPath);
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1524,7 +1474,7 @@ namespace NuGet.CommandLine.Test
 
                 server.Get.Add("/", request =>
                 {
-                    return ServerHandler(request, hitsByUrl, server, indexJson, localRepo);
+                    return ServerHandler(request, hitsByUrl, server, indexJson, repositoryPath);
                 });
 
                 server.Start();
@@ -1553,15 +1503,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1578,13 +1527,13 @@ namespace NuGet.CommandLine.Test
             Directory.CreateDirectory(repositoryPath);
             Directory.CreateDirectory(Path.Combine(workingPath, ".nuget"));
 
-            var packageA = Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
-            var packageB = Util.CreatePackage(repositoryPath, "packageB", "1.0.0");
-            var packageC = Util.CreatePackage(repositoryPath, "packageC", "1.0.0");
+            Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
+            Util.CreatePackage(repositoryPath, "packageB", "1.0.0");
+            Util.CreatePackage(repositoryPath, "packageC", "1.0.0");
 
-            var packageD = Util.CreatePackage(repositoryPath, "packageD", "1.0.0");
-            var packageE = Util.CreatePackage(repositoryPath, "packageE", "1.0.0");
-            var packageF = Util.CreatePackage(repositoryPath, "packageF", "1.0.0");
+            Util.CreatePackage(repositoryPath, "packageD", "1.0.0");
+            Util.CreatePackage(repositoryPath, "packageE", "1.0.0");
+            Util.CreatePackage(repositoryPath, "packageF", "1.0.0");
 
             Util.CreateFile(
                proj1Dir,
@@ -1672,13 +1621,13 @@ namespace NuGet.CommandLine.Test
             ConcurrentDictionary<string, int> hitsByUrl,
             MockServer server,
             JObject indexJson,
-            LocalPackageRepository localRepo)
+            string repositoryPath)
         {
             return ServerHandler(request,
                 hitsByUrl,
                 server,
                 indexJson,
-                localRepo,
+                repositoryPath,
                 new ManualResetEventSlim(true),
                 new ManualResetEventSlim(true));
         }
@@ -1688,7 +1637,7 @@ namespace NuGet.CommandLine.Test
             ConcurrentDictionary<string, int> hitsByUrl,
             MockServer server,
             JObject indexJson,
-            LocalPackageRepository localRepo,
+            string repositoryPath,
             ManualResetEventSlim v2DownloadWait,
             ManualResetEventSlim v3DownloadWait)
         {
@@ -1696,7 +1645,6 @@ namespace NuGet.CommandLine.Test
             {
                 var path = server.GetRequestUrlAbsolutePath(request);
                 var parts = request.Url.AbsolutePath.Split('/');
-                var repositoryPath = localRepo.Source;
 
                 // track hits on the url
                 var urlHits = hitsByUrl.AddOrUpdate(server.GetRequestRawUrl(request), 1, (s, i) => i + 1);
@@ -1721,12 +1669,10 @@ namespace NuGet.CommandLine.Test
 
                     if (file.Exists)
                     {
-                        var package = new ZipPackage(file.FullName);
-
                         return new Action<HttpListenerResponse>(response =>
                         {
                             response.ContentType = "application/atom+xml;type=entry;charset=utf-8";
-                            var odata = server.ToOData(package);
+                            var odata = server.ToOData(new PackageArchiveReader(file.OpenRead()));
                             MockServer.SetResponseContent(response, odata);
                         });
                     }
@@ -1849,12 +1795,12 @@ namespace NuGet.CommandLine.Test
                 else if (path.StartsWith("/nuget/FindPackagesById()"))
                 {
                     var id = request.QueryString.Get("id").Trim('\'');
-                    var packages = localRepo.FindPackagesById(id);
+                    var packages = LocalFolderUtility.GetPackagesV2(repositoryPath, id, NullLogger.Instance);
 
                     return new Action<HttpListenerResponse>(response =>
                     {
                         response.ContentType = "application/atom+xml;type=feed;charset=utf-8";
-                        var feed = server.ToODataFeed(packages, "FindPackagesById");
+                        var feed = server.ToODataFeed(packages.Select(e => new FileInfo(e.Path)), "FindPackagesById");
                         MockServer.SetResponseContent(response, feed);
                     });
                 }

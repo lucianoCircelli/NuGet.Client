@@ -61,6 +61,8 @@ Copyright (c) .NET Foundation. All rights reserved.
     <GetReferenceNearestTargetFrameworkTaskSupportsTargetPlatformParameter>true</GetReferenceNearestTargetFrameworkTaskSupportsTargetPlatformParameter>
     <!-- Flag if the Central package file is enabled -->
     <_CentralPackageVersionsEnabled Condition="'$(ManagePackageVersionsCentrally)' == 'true' AND '$(CentralPackageVersionsFileImported)' == 'true'">true</_CentralPackageVersionsEnabled>
+    <!-- NuGetAudit is enabled by default when using the .NET 8 SDK or above. Customers should set 'true', so we'll use 'default' to signal implicit opt-in -->
+    <NuGetAudit Condition=" '$(NuGetAudit)' == '' AND $([MSBuild]::VersionGreaterThanOrEquals($([MSBuild]::ValueOrDefault('$(NETCoreSdkVersion)', '0.0')), '8.0'))">default</NuGetAudit>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -92,6 +94,30 @@ Copyright (c) .NET Foundation. All rights reserved.
     </_GenerateRestoreGraphProjectEntryInputProperties>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true' And '$(RestoreEnableGlobalPackageReference)' != 'false'">
+    <!--
+        Add GlobalPackageReference items to the PackageReference item group with no version.
+
+        Global package references only include the same assets as a development dependency (runtime; build; native; contentfiles; analyzers)
+        because those kind of packages are the best candidate for a global package reference.  They are generally packages that
+        extend the build.
+
+        Global package references have all assets private because central package references are generally packages that provide
+        versioning, signing, etc and should not flow to downstream dependencies.  Also, central package references are already
+        referenced by every project in the tree so they don't need to be transitive.
+      -->
+    <PackageReference Include="@(GlobalPackageReference)"
+                      Version=""
+                      IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers"
+                      PrivateAssets="All" />
+
+      <!--
+        Add GlobalPackageReference items to the PackageVersion item group with the version.
+      -->
+    <PackageVersion Include="@(GlobalPackageReference)"
+                    Version="%(Version)" />
+  </ItemGroup>
+
   <!-- Tasks -->
   <UsingTask TaskName="NuGet.Build.Tasks.RestoreTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.WriteRestoreGraphTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
@@ -110,6 +136,7 @@ Copyright (c) .NET Foundation. All rights reserved.
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreProjectStyleTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.NuGetMessageTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.CheckForDuplicateNuGetItemsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
+  <UsingTask TaskName="NuGet.Build.Tasks.GetGlobalPropertyValueTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
 
   <!--
     ============================================================
@@ -138,7 +165,9 @@ Copyright (c) .NET Foundation. All rights reserved.
       HideWarningsAndErrors="$(HideWarningsAndErrors)"
       Interactive="$(NuGetInteractive)"
       RestoreForceEvaluate="$(RestoreForceEvaluate)"
-      RestorePackagesConfig="$(RestorePackagesConfig)"/>
+      RestorePackagesConfig="$(RestorePackagesConfig)">
+      <Output TaskParameter="EmbedInBinlog" ItemName="EmbedInBinlog" />
+    </RestoreTask>
   </Target>
 
   <!--
@@ -189,6 +218,7 @@ Copyright (c) .NET Foundation. All rights reserved.
       MSBuildProjectFullPath="$(MSBuildProjectFullPath)"
       TreatWarningsAsErrors="$(TreatWarningsAsErrors)"
       WarningsAsErrors="$(WarningsAsErrors)"
+      WarningsNotAsErrors="$(WarningsNotAsErrors)"
       NoWarn="$(NoWarn)"
       ContinueOnError="$(CollectPackageReferencesContinueOnError)"
       >
@@ -224,6 +254,7 @@ Copyright (c) .NET Foundation. All rights reserved.
       MSBuildProjectFullPath="$(MSBuildProjectFullPath)"
       TreatWarningsAsErrors="$(TreatWarningsAsErrors)"
       WarningsAsErrors="$(WarningsAsErrors)"
+      WarningsNotAsErrors="$(WarningsNotAsErrors)"
       NoWarn="$(NoWarn)"
       ContinueOnError="$(CollectCentralPackageVersionsContinueOnError)"
       >
@@ -234,7 +265,7 @@ Copyright (c) .NET Foundation. All rights reserved.
       <PackageVersion Remove="@(PackageVersion)" />
       <PackageVersion Include="@(DeduplicatedPackageVersions)" />
     </ItemGroup>
-    
+
   </Target>
 
   <!--
@@ -260,6 +291,7 @@ Copyright (c) .NET Foundation. All rights reserved.
       MSBuildProjectFullPath="$(MSBuildProjectFullPath)"
       TreatWarningsAsErrors="$(TreatWarningsAsErrors)"
       WarningsAsErrors="$(WarningsAsErrors)"
+      WarningsNotAsErrors="$(WarningsNotAsErrors)"
       NoWarn="$(NoWarn)"
       ContinueOnError="$(CollectPackageDownloadsContinueOnError)"
       >
@@ -278,11 +310,11 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="CollectFrameworkReferences" Returns="@(_FrameworkReferenceForRestore)">
-      <ItemGroup>
-          <_FrameworkReferenceForRestore 
-            Include="@(FrameworkReference)"
-            Condition="'%(FrameworkReference.IsTransitiveFrameworkReference)' != 'true'"/>
-      </ItemGroup>
+    <ItemGroup>
+      <_FrameworkReferenceForRestore
+        Include="@(FrameworkReference)"
+        Condition="'%(FrameworkReference.IsTransitiveFrameworkReference)' != 'true'"/>
+    </ItemGroup>
   </Target>
   <!--
     ============================================================
@@ -584,18 +616,19 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="_GetRestoreTargetFrameworksOutput"
-    DependsOnTargets="_GetRestoreProjectStyle"
+    DependsOnTargets="_GetRestoreProjectStyle;_GetRestoreTargetFrameworkOverride"
     Returns="@(_RestoreTargetFrameworksOutputFiltered)">
 
     <PropertyGroup>
       <_RestoreProjectFramework/>
+      <_TargetFrameworkToBeUsed Condition=" '$(_TargetFrameworkOverride)' == '' ">$(TargetFrameworks)</_TargetFrameworkToBeUsed>
     </PropertyGroup>
 
     <!-- For project.json projects target frameworks will be read from project.json. -->
     <GetProjectTargetFrameworksTask
       Condition=" '$(RestoreProjectStyle)' != 'ProjectJson'"
       ProjectPath="$(MSBuildProjectFullPath)"
-      TargetFrameworks="$(TargetFrameworks)"
+      TargetFrameworks="$(_TargetFrameworkToBeUsed)"
       TargetFramework="$(TargetFramework)"
       TargetFrameworkMoniker="$(TargetFrameworkMoniker)"
       TargetPlatformIdentifier="$(TargetPlatformIdentifier)"
@@ -616,13 +649,17 @@ Copyright (c) .NET Foundation. All rights reserved.
     _GetRestoreTargetFrameworksAsItems
     Read $(TargetFrameworks) from the project as items.
     Projects that do not have $(TargetFrameworks) will noop.
+    If $(TargetFramework) is specified globally, it'll be preferred over $(TargetFrameworks)
     ============================================================
   -->
   <Target Name="_GetRestoreTargetFrameworksAsItems"
-    DependsOnTargets="_GetRestoreProjectStyle"
+    DependsOnTargets="_GetRestoreProjectStyle;_GetRestoreTargetFrameworkOverride"
     Returns="@(_RestoreTargetFrameworkItems)">
-    <ItemGroup Condition=" '$(TargetFrameworks)' != '' ">
+    <ItemGroup Condition=" '$(TargetFrameworks)' != '' AND '$(_TargetFrameworkOverride)' == '' ">
       <_RestoreTargetFrameworkItems Include="$(TargetFrameworks.Split(';'))" />
+    </ItemGroup>
+    <ItemGroup Condition=" '$(TargetFrameworks)' != '' AND '$(_TargetFrameworkOverride)' != '' ">
+      <_RestoreTargetFrameworkItems Include="$(_TargetFrameworkOverride)" />
     </ItemGroup>
   </Target>
 
@@ -688,8 +725,8 @@ Copyright (c) .NET Foundation. All rights reserved.
 
   <!--
     ============================================================
-    _GetRestoreSettingsCurrentProject
-    Generate items for a single framework.
+    _GetRestoreSettingsAllFrameworks
+    Generate items for all frameworks.
     ============================================================
   -->
   <Target Name="_GetRestoreSettingsAllFrameworks"
@@ -806,6 +843,7 @@ Copyright (c) .NET Foundation. All rights reserved.
         <ConfigFilePaths>$(_OutputConfigFilePaths)</ConfigFilePaths>
         <TreatWarningsAsErrors>$(TreatWarningsAsErrors)</TreatWarningsAsErrors>
         <WarningsAsErrors>$(WarningsAsErrors)</WarningsAsErrors>
+        <WarningsNotAsErrors>$(WarningsNotAsErrors)</WarningsNotAsErrors>
         <NoWarn>$(NoWarn)</NoWarn>
         <RestorePackagesWithLockFile>$(RestorePackagesWithLockFile)</RestorePackagesWithLockFile>
         <NuGetLockFilePath>$(NuGetLockFilePath)</NuGetLockFilePath>
@@ -813,6 +851,9 @@ Copyright (c) .NET Foundation. All rights reserved.
         <_CentralPackageVersionsEnabled>$(_CentralPackageVersionsEnabled)</_CentralPackageVersionsEnabled>
         <CentralPackageVersionOverrideEnabled>$(CentralPackageVersionOverrideEnabled)</CentralPackageVersionOverrideEnabled>
         <CentralPackageTransitivePinningEnabled>$(CentralPackageTransitivePinningEnabled)</CentralPackageTransitivePinningEnabled>
+        <NuGetAudit>$(NuGetAudit)</NuGetAudit>
+        <NuGetAuditLevel>$(NuGetAuditLevel)</NuGetAuditLevel>
+        <NuGetAuditMode>$(NuGetAuditMode)</NuGetAuditMode>
       </_RestoreGraphEntry>
     </ItemGroup>
 
@@ -852,7 +893,7 @@ Copyright (c) .NET Foundation. All rights reserved.
         <ConfigFilePaths>$(_OutputConfigFilePaths)</ConfigFilePaths>
         <PackagesPath>$(_OutputPackagesPath)</PackagesPath>
         <TargetFrameworks>@(_RestoreTargetFrameworksOutputFiltered)</TargetFrameworks>
-        </_RestoreGraphEntry>
+      </_RestoreGraphEntry>
     </ItemGroup>
 
     <!-- Non-NuGet type -->
@@ -902,9 +943,9 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="_GenerateProjectRestoreGraphAllFrameworks"
-    Condition=" '$(TargetFrameworks)' != '' "
-    DependsOnTargets="_GetRestoreTargetFrameworksAsItems"
-    Returns="@(_RestoreGraphEntry)">
+      Condition=" '$(TargetFrameworks)' != '' "
+      DependsOnTargets="_GetRestoreTargetFrameworksAsItems"
+      Returns="@(_RestoreGraphEntry)">
 
     <!-- Get project and package references  -->
     <!-- Evaluate for each framework -->
@@ -1025,6 +1066,7 @@ Copyright (c) .NET Foundation. All rights reserved.
         <TargetPlatformMinVersion>$(TargetPlatformMinVersion)</TargetPlatformMinVersion>
         <CLRSupport>$(CLRSupport)</CLRSupport>
         <RuntimeIdentifierGraphPath>$(RuntimeIdentifierGraphPath)</RuntimeIdentifierGraphPath>
+        <WindowsTargetPlatformMinVersion>$(WindowsTargetPlatformMinVersion)</WindowsTargetPlatformMinVersion>
       </_RestoreGraphEntry>
     </ItemGroup>
   </Target>
@@ -1366,6 +1408,36 @@ Copyright (c) .NET Foundation. All rights reserved.
 
   <!--
     ============================================================
+    _GetRestoreTargetFrameworkOverride
+    ============================================================
+  -->
+  <Target Name="_GetRestoreTargetFrameworkOverride"
+          Condition=" '$(_DisableNuGetRestoreTargetFrameworksOverride)' != 'true' "
+          Returns="$(_TargetFrameworkOverride)">
+
+    <GetGlobalPropertyValueTask
+      PropertyName="TargetFramework"
+        Condition=" '$(TargetFrameworks)' != '' ">
+      <Output TaskParameter="GlobalPropertyValue" PropertyName="_TargetFrameworkOverride" />
+    </GetGlobalPropertyValueTask>
+
+    <!-- Only set the override if TargetFrameworks has not been overriden as well. In that case, prefer it. -->
+  </Target>
+
+  <!--
+    ============================================================
+    _GetTargetFrameworkOverrides
+    ============================================================
+  -->
+  <Target Name="_GetTargetFrameworkOverrides"
+          Returns="$(_TargetFrameworkOverride)">
+    <PropertyGroup>
+      <_TargetFrameworkOverride Condition=" '$(TargetFrameworks)' == '' ">$(TargetFramework)</_TargetFrameworkOverride>
+    </PropertyGroup>
+  </Target>
+
+  <!--
+    ============================================================
     _IsProjectRestoreSupported
     Verify restore targets exist in the project.
     ============================================================
@@ -1377,7 +1449,7 @@ Copyright (c) .NET Foundation. All rights reserved.
       <_ValidProjectsForRestore Include="$(MSBuildProjectFullPath)" />
     </ItemGroup>
   </Target>
- 
+
   <!--
     ============================================================
     Import NuGet.RestoreEx.targets if the MSBuild property 'RestoreEnableStaticGraph'

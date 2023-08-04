@@ -76,7 +76,7 @@ namespace NuGet.PackageManagement.UI
 
                 if (e.Parameter is not null and HyperlinkType hyperlinkType)
                 {
-                    var evt = new HyperlinkClickedTelemetryEvent(hyperlinkType, UIUtility.ToContractsItemFilter(Control.ActiveFilter), Control.Model.IsSolution);
+                    var evt = NavigatedTelemetryEvent.CreateWithExternalLink(hyperlinkType, UIUtility.ToContractsItemFilter(Control.ActiveFilter), Control.Model.IsSolution);
                     TelemetryActivity.EmitTelemetryEvent(evt);
                 }
             }
@@ -142,8 +142,7 @@ namespace NuGet.PackageManagement.UI
                     model.Id,
                     model.SelectedVersion.Version,
                     Control.Model.IsSolution,
-                    UIUtility.ToContractsItemFilter(Control._topPanel.Filter),
-                    model.SelectedVersion.Range);
+                    UIUtility.ToContractsItemFilter(Control._topPanel.Filter));
 
                 ExecuteUserAction(userAction, NuGetActionType.Install);
             }

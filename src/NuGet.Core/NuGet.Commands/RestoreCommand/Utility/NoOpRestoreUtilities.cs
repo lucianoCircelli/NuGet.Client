@@ -174,7 +174,7 @@ namespace NuGet.Commands
                     {
                         request.DependencyProviders.PackageFileCache.UpdateLastAccessTime(metadataFile);
                     }
-                    catch(Exception ex)
+                    catch (Exception ex)
                     {
                         request.Log.Log(RestoreLogMessage.CreateWarning(NuGetLogCode.NU1802,
                             string.Format(CultureInfo.InvariantCulture, Strings.Error_CouldNotUpdateMetadataLastAccessTime,
@@ -288,7 +288,7 @@ namespace NuGet.Commands
             return packageFiles;
         }
 
-        private static IEnumerable<string> GetPackageFiles(LocalPackageFileCache packageFileCache, string packageId, NuGetVersion version, IEnumerable<VersionFolderPathResolver> resolvers)
+        private static IEnumerable<string> GetPackageFiles(LocalPackageFileCache packageFileCache, string packageId, NuGetVersion version, List<VersionFolderPathResolver> resolvers)
         {
             foreach (var resolver in resolvers)
             {

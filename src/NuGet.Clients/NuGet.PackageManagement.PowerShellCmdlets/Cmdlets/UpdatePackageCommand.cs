@@ -8,7 +8,6 @@ using System.Linq;
 using System.Management.Automation;
 using System.Threading.Tasks;
 using NuGet.Common;
-using NuGet.Configuration;
 using NuGet.PackageManagement.Telemetry;
 using NuGet.Packaging.Core;
 using NuGet.Packaging.Signing;
@@ -132,7 +131,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                     WaitAndLogPackageActions();
                     UnsubscribeFromProgressEvents();
 
-                    return Task.FromResult(true);
+                    return TaskResult.True;
                 }, Token);
             });
 

@@ -3,6 +3,7 @@
 
 #if IS_SIGNING_SUPPORTED
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
@@ -144,6 +145,7 @@ namespace NuGet.Packaging.Signing
                 isIssuerSerialRequired,
                 errors,
                 signingSpecifications,
+                CertificateType.Signature,
                 includeChain);
         }
 
@@ -258,6 +260,7 @@ namespace NuGet.Packaging.Signing
                 isIssuerSerialRequired,
                 errors,
                 signingSpecifications,
+                CertificateType.Signature,
                 includeChain);
         }
 
@@ -285,6 +288,31 @@ namespace NuGet.Packaging.Signing
             }
 
             return false;
+        }
+
+        internal static void LogAdditionalContext(IX509Chain chain, List<SignatureLog> issues)
+        {
+            if (chain is null)
+            {
+                throw new ArgumentNullException(nameof(chain));
+            }
+
+            if (issues is null)
+            {
+                throw new ArgumentNullException(nameof(issues));
+            }
+
+            ILogMessage logMessage = chain.AdditionalContext;
+
+            if (logMessage is not null)
+            {
+                SignatureLog issue = SignatureLog.Issue(
+                    fatal: false,
+                    logMessage.Code,
+                    logMessage.Message);
+
+                issues.Add(issue);
+            }
         }
 
         internal static IX509CertificateChain GetTimestampCertificates(
@@ -326,6 +354,7 @@ namespace NuGet.Packaging.Signing
                 isIssuerSerialRequired,
                 errors,
                 signingSpecifications,
+                CertificateType.Timestamp,
                 includeChain);
         }
 
@@ -336,6 +365,7 @@ namespace NuGet.Packaging.Signing
             bool isIssuerSerialRequired,
             Errors errors,
             SigningSpecifications signingSpecifications,
+            CertificateType certificateType,
             bool includeChain)
         {
             if (signedCms == null)
@@ -522,7 +552,11 @@ namespace NuGet.Packaging.Signing
                 }
             }
 
-            var certificates = GetCertificateChain(signerInfo.Certificate, signedCms.Certificates, includeChain);
+            IX509CertificateChain certificates = GetCertificateChain(
+                signerInfo.Certificate,
+                signedCms.Certificates,
+                certificateType,
+                includeChain);
 
             if (certificates == null || certificates.Count == 0)
             {
@@ -610,6 +644,7 @@ namespace NuGet.Packaging.Signing
         private static IX509CertificateChain GetCertificateChain(
             X509Certificate2 certificate,
             X509Certificate2Collection extraStore,
+            CertificateType certificateType,
             bool includeCertificatesAfterSigningCertificate)
         {
             if (!includeCertificatesAfterSigningCertificate)
@@ -617,9 +652,10 @@ namespace NuGet.Packaging.Signing
                 return new X509CertificateChain() { certificate };
             }
 
-            using (var chainHolder = new X509ChainHolder())
+            using (X509ChainHolder chainHolder = certificateType == CertificateType.Signature
+                ? X509ChainHolder.CreateForCodeSigning() : X509ChainHolder.CreateForTimestamping())
             {
-                X509Chain chain = chainHolder.Chain;
+                IX509Chain chain = chainHolder.Chain2;
 
                 chain.ChainPolicy.ExtraStore.AddRange(extraStore);
 
@@ -635,7 +671,7 @@ namespace NuGet.Packaging.Signing
                     return null;
                 }
 
-                return CertificateChainUtility.GetCertificateChain(chain);
+                return CertificateChainUtility.GetCertificateChain(chain.PrivateReference);
             }
         }
 

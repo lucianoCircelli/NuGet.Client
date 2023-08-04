@@ -4,7 +4,6 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -45,7 +44,7 @@ namespace NuGet.Common
 
                 while (true)
                 {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     var lockPath = string.Empty;
 
                     try
@@ -88,14 +87,14 @@ namespace NuGet.Common
 
                             // This can occur when the file is being deleted
                             // Or when an admin user has locked the file
-                            await Task.Delay(SleepDuration);
+                            await Task.Delay(SleepDuration, token);
                             continue;
                         }
                         catch (IOException)
                         {
                             token.ThrowIfCancellationRequested();
 
-                            await Task.Delay(SleepDuration);
+                            await Task.Delay(SleepDuration, token);
                             continue;
                         }
 
@@ -134,7 +133,7 @@ namespace NuGet.Common
 
                 while (true)
                 {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     var lockPath = string.Empty;
                     try
                     {
@@ -216,7 +215,7 @@ namespace NuGet.Common
                 options: UseDeleteOnClose ? FileOptions.DeleteOnClose : FileOptions.None);
         }
 
-        private static string _basePath;
+        private static string? _basePath;
         private static string BasePath
         {
             get
@@ -228,7 +227,7 @@ namespace NuGet.Common
 
                 _basePath = Path.Combine(NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp), "lock");
 
-                DirectoryUtility.CreateSharedDirectory(_basePath);
+                Directory.CreateDirectory(_basePath);
 
                 return _basePath;
             }
@@ -238,7 +237,7 @@ namespace NuGet.Common
         {
             // In case the directory was cleaned up, we can choose to fix it (at a cost of another roundtrip to disk
             // or fail, starting with the more expensive path, and we might have to get rid of it if it becomes too hot.
-            DirectoryUtility.CreateSharedDirectory(BasePath);
+            Directory.CreateDirectory(BasePath);
 
             return Path.Combine(BasePath, FilePathToLockName(filePath));
         }

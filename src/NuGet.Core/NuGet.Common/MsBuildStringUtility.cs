@@ -9,10 +9,6 @@ namespace NuGet.Common
 {
     public static class MSBuildStringUtility
     {
-#if NET45
-        private static readonly string[] EmptyStringArray = new string[0];
-#endif
-
         /// <summary>
         /// Split on ; and trim. Null or empty inputs will return an
         /// empty array.
@@ -37,17 +33,13 @@ namespace NuGet.Common
                     .Where(entry => entry.Length != 0)
                     .ToArray();
             }
-#if NET45
-            return EmptyStringArray;
-#else
             return Array.Empty<string>();
-#endif
         }
 
         /// <summary>
         /// Trims the provided string and converts empty strings to null.
         /// </summary>
-        public static string TrimAndGetNullForEmpty(string s)
+        public static string? TrimAndGetNullForEmpty(string? s)
         {
             if (s == null)
             {
@@ -62,27 +54,24 @@ namespace NuGet.Common
         /// <summary>
         /// Trims the provided strings and excludes empty or null strings.
         /// </summary>
-        public static string[] TrimAndExcludeNullOrEmpty(string[] strings)
+        public static string[] TrimAndExcludeNullOrEmpty(string?[]? strings)
         {
             if (strings == null)
             {
-#if NET45
-                return EmptyStringArray;
-#else
                 return Array.Empty<string>();
-#endif
             }
 
             return strings
                 .Select(s => TrimAndGetNullForEmpty(s))
                 .Where(s => s != null)
+                .Cast<string>()
                 .ToArray();
         }
 
         /// <summary>
         /// True if the property is set to true
         /// </summary>
-        public static bool IsTrue(string value)
+        public static bool IsTrue(string? value)
         {
             return bool.TrueString.Equals(TrimAndGetNullForEmpty(value), StringComparison.OrdinalIgnoreCase);
         }
@@ -90,7 +79,7 @@ namespace NuGet.Common
         /// <summary>
         /// True if the property is set to true or empty.
         /// </summary>
-        public static bool IsTrueOrEmpty(string value)
+        public static bool IsTrueOrEmpty(string? value)
         {
             return TrimAndGetNullForEmpty(value) == null || IsTrue(value);
         }
@@ -114,7 +103,7 @@ namespace NuGet.Common
         /// <summary>
         /// Convert the provided string to a boolean, or return null if the value can't be parsed as a boolean.
         /// </summary>
-        public static bool? GetBooleanOrNull(string value)
+        public static bool? GetBooleanOrNull(string? value)
         {
             if (bool.TryParse(value, out var result))
             {
@@ -127,7 +116,7 @@ namespace NuGet.Common
         /// <summary>
         /// Convert the provided string to MSBuild style.
         /// </summary>
-        public static string Convert(string value)
+        public static string? Convert(string? value)
         {
             if (value == null)
             {

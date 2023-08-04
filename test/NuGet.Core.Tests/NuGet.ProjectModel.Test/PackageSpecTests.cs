@@ -362,7 +362,8 @@ namespace NuGet.ProjectModel.Test
             var allWarningsAsErrors = true;
             var noWarn = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1000, NuGetLogCode.NU1500 };
             var warningsAsErrors = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1001, NuGetLogCode.NU1501 };
-            var warningProperties = new WarningProperties(allWarningsAsErrors: allWarningsAsErrors, warningsAsErrors: warningsAsErrors, noWarn: noWarn);
+            var warningsNotAsErrors = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1005 };
+            var warningProperties = new WarningProperties(allWarningsAsErrors: allWarningsAsErrors, warningsAsErrors: warningsAsErrors, noWarn: noWarn, warningsNotAsErrors: warningsNotAsErrors);
 
             var originalProjectRestoreMetadata = new ProjectRestoreMetadata();
             originalProjectRestoreMetadata.ProjectStyle = ProjectStyle.PackageReference;
@@ -734,7 +735,8 @@ namespace NuGet.ProjectModel.Test
             var allWarningsAsErrors = false;
             var noWarn = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1000, NuGetLogCode.NU1500 };
             var warningsAsErrors = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1001, NuGetLogCode.NU1501 };
-            var originalWarningProperties = new WarningProperties(allWarningsAsErrors: allWarningsAsErrors, warningsAsErrors: warningsAsErrors, noWarn: noWarn);
+            var warningsNotAsErrors = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1005 };
+            var originalWarningProperties = new WarningProperties(allWarningsAsErrors: allWarningsAsErrors, warningsAsErrors: warningsAsErrors, noWarn: noWarn, warningsNotAsErrors: warningsNotAsErrors);
 
             //Act
             var clone = originalWarningProperties.Clone();
@@ -758,6 +760,7 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Fact]
+        [Obsolete]
         public void FrameworkRuntimePairCloneTest()
         {
             //Setup
@@ -765,8 +768,7 @@ namespace NuGet.ProjectModel.Test
             //Act
             var clone = frp.Clone();
             //Assert
-            Assert.Equal(frp, clone);
-            Assert.False(object.ReferenceEquals(frp, clone));
+            Assert.Same(frp, clone);
         }
 
         private static CompatibilityProfile CreateCompatibilityProfile(string name, string tfm = "net461")
@@ -784,7 +786,7 @@ namespace NuGet.ProjectModel.Test
             //Assert
             Assert.Equal(compat, clone);
             Assert.False(object.ReferenceEquals(compat, clone));
-            Assert.False(object.ReferenceEquals(compat.RestoreContexts[0], clone.RestoreContexts[0]));
+            Assert.Same(compat.RestoreContexts[0], clone.RestoreContexts[0]); // FRP is immutable so the instance is reused
 
             // Act - Change the list of compat
             compat.RestoreContexts.Add(CreateFrameworkRuntimePair(rid: "win10-x64"));

@@ -18,7 +18,6 @@ using NuGet.Commands;
 using NuGet.Commands.Test;
 using NuGet.Common;
 using NuGet.Configuration;
-using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.PackageManagement.VisualStudio.Exceptions;
 using NuGet.Packaging;
@@ -29,9 +28,10 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
+using Xunit.Abstractions;
 using static NuGet.PackageManagement.VisualStudio.Test.ProjectFactories;
 
 namespace NuGet.PackageManagement.VisualStudio.Test
@@ -39,22 +39,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
     [Collection(MockedVS.Collection)]
     public class CpsPackageReferenceProjectTests : MockedVSCollectionTests
     {
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
         public CpsPackageReferenceProjectTests(GlobalServiceProvider globalServiceProvider)
             : base(globalServiceProvider)
         {
             var componentModel = new Mock<IComponentModel>();
-            AddService<SComponentModel>(Task.FromResult((object)componentModel.Object));
 
-            // Force Enable Transitive Origin experiment tests
-            var constant = ExperimentationConstants.TransitiveDependenciesInPMUI;
-            var flightsEnabled = new Dictionary<string, bool>()
-            {
-                { constant.FlightFlag, true },
-            };
-            var service = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(flightsEnabled));
-
-            service.IsExperimentEnabled(ExperimentationConstants.TransitiveDependenciesInPMUI).Should().Be(true);
-            componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(service);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
         }
 
         [Fact]
@@ -525,7 +519,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 // Create project
                 var projectName = "a";
                 var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                 // We need to treat NU1605 warning as error.
                 project.IsNu1605Error = true;
@@ -636,7 +630,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 // Create project
                 var projectName = "a";
                 var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                 // We need to treat NU1605 warning as error.
                 project.IsNu1605Error = true;
@@ -757,7 +751,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -898,7 +892,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1056,7 +1050,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1191,7 +1185,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1340,7 +1334,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.SolutionRoot, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1490,7 +1484,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1640,7 +1634,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1790,7 +1784,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1928,7 +1922,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2062,7 +2056,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2196,7 +2190,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2336,7 +2330,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     //project.IsNu1605Error = true;
@@ -2434,7 +2428,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2542,7 +2536,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2697,7 +2691,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2803,6 +2797,106 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 // There should be no warning/error.
                 Assert.Equal(builtIntegratedActions.Sum(b => b.RestoreResult.LogMessages.Count()), 0);
             }
+        }
+
+        [Fact]
+        public async Task GetInstalledPackagesAsync_WithCancellationToken_ThrowsAsync()
+        {
+            // Arrange
+            using var testContext = new SimpleTestPathContext();
+
+            var project = await PrepareTestProjectAsync(testContext) as CpsPackageReferenceProject;
+
+            // Act and Assert
+            await Assert.ThrowsAsync<OperationCanceledException>(async () => await project.GetInstalledPackagesAsync(new CancellationToken(canceled: true)));
+        }
+
+        [Fact]
+        public async Task GetInstalledPackagesAsync_FirstCall_NoTransitivePackagesAsync()
+        {
+            // Arrange
+            using var testContext = new SimpleTestPathContext();
+            await CreatePackagesAsync(testContext);
+
+            var project = await PrepareTestProjectAsync(testContext) as CpsPackageReferenceProject;
+
+            // Act
+            IEnumerable<PackageReference> intalledPackages = await project.GetInstalledPackagesAsync(CancellationToken.None);
+
+            // Assert
+            Assert.Collection(intalledPackages,
+                elem => Assert.Equal(new PackageIdentity("PackageA", NuGetVersion.Parse("2.15.3")), elem.PackageIdentity));
+        }
+
+        [Fact]
+        public async Task GetInstalledPackagesAsync_WithGetInstalledAndTransitivePackagesCallAtSameTime_DoesNotDeadlockAsync()
+        {
+            // Arrange
+            using var testContext = new SimpleTestPathContext();
+            await CreatePackagesAsync(testContext);
+
+            var project = await PrepareTestProjectAsync(testContext) as CpsPackageReferenceProject;
+
+            IEnumerable<PackageReference> installed = null;
+            ProjectPackages installedAndTransitive;
+            var tasks = new Task[]
+            {
+                new Task(async () => installed = await project.GetInstalledPackagesAsync(CancellationToken.None)),
+                new Task(async () => installedAndTransitive = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None)),
+            };
+
+            // Act
+            Parallel.ForEach(tasks, tsk =>
+            {
+                if (tsk.Status == TaskStatus.Created)
+                {
+                    tsk.Start();
+                }
+            });
+            await Task.WhenAll(tasks);
+
+            // Assert
+            installed.Should().BeEquivalentTo(installedAndTransitive.InstalledPackages);
+            Assert.Collection(installed,
+                elem => Assert.Equal(new PackageIdentity("PackageA", NuGetVersion.Parse("2.15.3")), elem.PackageIdentity));
+            Assert.Collection(installedAndTransitive.TransitivePackages,
+                elem => Assert.Equal(new PackageIdentity("PackageB", NuGetVersion.Parse("1.0.0")), elem.PackageIdentity));
+        }
+
+        [Fact]
+        public async Task GetInstalledPackagesAsync_WithMultipleCalls_DoesNotDeadlockAsync()
+        {
+            // Arrange
+            using var testContext = new SimpleTestPathContext();
+            await CreatePackagesAsync(testContext);
+
+            var project = await PrepareTestProjectAsync(testContext) as CpsPackageReferenceProject;
+
+            var tasks = new[]
+            {
+                project.GetInstalledPackagesAsync(CancellationToken.None),
+                project.GetInstalledPackagesAsync(CancellationToken.None),
+                project.GetInstalledPackagesAsync(CancellationToken.None),
+                project.GetInstalledPackagesAsync(CancellationToken.None),
+                project.GetInstalledPackagesAsync(CancellationToken.None),
+            };
+
+            // Act
+            Parallel.ForEach(tasks, tsk =>
+            {
+                if (tsk.Status == TaskStatus.Created)
+                {
+                    tsk.Start();
+                }
+            });
+            IEnumerable<PackageReference>[] results = await Task.WhenAll(tasks);
+            IEnumerable<PackageReference> first = results[0];
+
+            // Assert
+            results.Should().AllBeEquivalentTo(first);
+
+            Assert.Collection(first,
+                elem => Assert.Equal(new PackageIdentity("PackageA", NuGetVersion.Parse("2.15.3")), elem.PackageIdentity));
         }
 
         [Fact]
@@ -2914,7 +3008,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3056,7 +3150,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3201,7 +3295,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3345,7 +3439,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3491,7 +3585,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3611,7 +3705,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3678,7 +3772,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3730,7 +3824,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3790,11 +3884,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
                 DateTime lastWriteTime = File.GetLastWriteTimeUtc(lockFilePath);
-                File.WriteAllText(lockFilePath, "** replaced file content to test cache **");
                 File.SetLastWriteTimeUtc(lockFilePath, lastWriteTime);
-                ProjectPackages cache_packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages cache_packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3802,6 +3895,326 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 cache_packages.TransitivePackages.Should().Contain(a => a.PackageIdentity.Equals(new PackageIdentity("packageB", new NuGetVersion("1.0.0"))));
                 Assert.True(lastWriteTime == File.GetLastWriteTimeUtc(lockFilePath));
             }
+        }
+
+        internal static async Task<IPackageReferenceProject> PrepareTestProjectAsync(SimpleTestPathContext rootDir, ITestOutputHelper output = null, string projectName = "project1")
+        {
+            // Setup
+            string projectDir = Path.Combine(rootDir.SolutionRoot, projectName);
+            string projectFullPath = Path.Combine(projectDir, projectName + ".csproj");
+            Directory.CreateDirectory(projectDir);
+
+            // Project
+            var projectCache = new ProjectSystemCache();
+            CpsPackageReferenceProject project = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+
+            ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
+            PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.15.3, )");
+
+            // Restore info
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
+            IVsProjectAdapter projectAdapter = Mock.Of<IVsProjectAdapter>();
+            projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
+
+            var logger = output == null ? new TestLogger() : new TestLogger(output);
+            // Package sources
+            var sources = new List<PackageSource>
+            {
+                new PackageSource(rootDir.PackageSource)
+            };
+            var request = new TestRestoreRequest(packageSpec, sources, rootDir.UserPackagesFolder, logger)
+            {
+                LockFilePath = Path.Combine(projectDir, "project.assets.json")
+            };
+
+            var command = new RestoreCommand(request);
+            RestoreResult result = await command.ExecuteAsync();
+            await result.CommitAsync(logger, CancellationToken.None);
+
+            return project;
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_AlternateCallsToExcludeAndIncludeTransitiveOriginsInParallel_ReturnsCorrectDataAsync()
+        {
+            using var rootDir = new SimpleTestPathContext();
+
+            // Arrange
+            await CreatePackagesAsync(rootDir);
+            IPackageReferenceProject project = await PrepareTestProjectAsync(rootDir);
+            List<Task> tasks = new List<Task>();
+            for (int i = 0; i < 5; i++)
+            {
+                tasks.Add(TestTransitiveOriginsAlternateAsync(project));
+            }
+
+            // Act
+            Parallel.ForEach(tasks, t =>
+            {
+                if (t.Status == TaskStatus.Created)
+                {
+                    t.Start();
+                }
+            });
+
+            // Assert inside tasks
+            await Task.WhenAll(tasks);
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_AlternateCallsToExcludeAndIncludeTransitiveOriginsMultipleTimes_ReturnsCorrectDataAsync()
+        {
+            using var rootDir = new SimpleTestPathContext();
+
+            // Arrange
+            await CreatePackagesAsync(rootDir);
+            IPackageReferenceProject project = await PrepareTestProjectAsync(rootDir);
+
+            for (int i = 0; i < 20; i++)
+            {
+                await TestTransitiveOriginsAlternateAsync(project);
+            }
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_SimulateBrowseTabAndSwitchToInstalledTab_InstalledTabCallHasTransitiveOriginsDataAsync()
+        {
+            using var rootDir = new SimpleTestPathContext();
+
+            // Setup
+            await CreatePackagesAsync(rootDir);
+            IPackageReferenceProject project = await PrepareTestProjectAsync(rootDir);
+
+            // Act I: Browse Tab: No need of transitive origins data
+            ProjectPackages packagesBrowseTab = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
+
+            // Assert I: No need of transitive origins data
+            Assert.NotEmpty(packagesBrowseTab.InstalledPackages);
+            Assert.NotEmpty(packagesBrowseTab.TransitivePackages);
+            Assert.All(packagesBrowseTab.TransitivePackages, pkg => Assert.Empty(pkg.TransitiveOrigins));
+
+            // Act II: Suppose we switch to Installed tab. Then, we need transitive origins data
+            ProjectPackages packagesInstalledTab = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert II: We need transitive data
+            Assert.NotEmpty(packagesInstalledTab.InstalledPackages);
+            Assert.NotEmpty(packagesInstalledTab.TransitivePackages);
+            Assert.All(packagesInstalledTab.TransitivePackages, pkg => Assert.NotEmpty(pkg.TransitiveOrigins));
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_ProjectReferenceWithPackageWithDependencies_ReturnsTransitivePackagesAsync()
+        {
+            // Project2 -> Project1 -> PackageA (1.0.0)
+            // PackageA (1.0.0) -> PackageB (1.0.0)
+
+            // Arrange
+            using var rootDir = new SimpleTestPathContext();
+
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+
+            PackageSpec prj1Spec = ProjectTestHelpers.GetPackageSpec("Project1", rootDir.SolutionRoot, framework: "net6.0", dependencyName: "PackageA");
+            PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "net6.0").WithTestProjectReference(prj1Spec);
+
+            await RestorePackageSpecsAsync(rootDir, output: null, prj1Spec, prj2Spec);
+
+            CpsPackageReferenceProject project2 = PrepareCpsRestoredProject(prj2Spec);
+
+            // Act
+            ProjectPackages result = await project2.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.Empty(result.InstalledPackages); // No installed packages
+            // Transitive packages have dependency data
+            // This algorithm will consider them as transitive packages, since some transitive packages contain dependencies
+            // Those transitive packages are filtered out in PM UI
+            Assert.NotEmpty(result.TransitivePackages);
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_ProjectReferenceWithSinglePackage_EmptyInstalledAndTransitivePackagesAsync()
+        {
+            // Project2 -> Project1 -> PackageB (1.0.0)
+            // PackageA (1.0.0) -> PackageB (1.0.0)
+
+            // Arrange
+            using var rootDir = new SimpleTestPathContext();
+
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+
+            PackageSpec prj1Spec = ProjectTestHelpers.GetPackageSpec("Project1", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageB");
+            PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "netstandard2.0").WithTestProjectReference(prj1Spec);
+
+            await RestorePackageSpecsAsync(rootDir, output: null, prj1Spec, prj2Spec);
+
+            CpsPackageReferenceProject project2 = PrepareCpsRestoredProject(prj2Spec);
+
+            // Act
+            ProjectPackages result = await project2.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.Empty(result.InstalledPackages); // No installed packages
+            // Foreign transitive packages in assets file don't have dependencies.
+            // Those are not considered transitive packages
+            Assert.Empty(result.TransitivePackages);
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_SimulatePackageInstallation_UpdatesDataAsync()
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange I: A project with no packages
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+
+            // Act I
+            ProjectPackages result = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert I
+            Assert.Empty(result.InstalledPackages);
+            Assert.Empty(result.TransitivePackages);
+
+            // Arrange II: Simulate package install by changing the package spec
+            PackageSpec projectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, projectSpec);
+            UpdateProjectSystemCache(cache, projectSpec, project);
+
+            // Act II
+            ProjectPackages result2 = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert II
+            Assert.NotEmpty(result2.InstalledPackages);
+            Assert.NotEmpty(result2.TransitivePackages);
+            Assert.All(result2.TransitivePackages, pkg => Assert.NotEmpty(pkg.TransitiveOrigins));
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsParamSetToTrue_ReturnsPackagesWithTransitiveOriginsAsync()
+        {
+            using SimpleTestPathContext rootDir = new();
+
+            // Arrange
+            await CreatePackagesAsync(rootDir);
+            IPackageReferenceProject project = await PrepareTestProjectAsync(rootDir);
+
+            // Act
+            ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.NotEmpty(packages.InstalledPackages);
+            Assert.NotEmpty(packages.TransitivePackages);
+            Assert.All(packages.TransitivePackages, pkg => Assert.NotEmpty(pkg.TransitiveOrigins));
+        }
+
+        [Theory]
+        [InlineData(false, false, 0, 0)]
+        [InlineData(false, true, 0, 0)]
+        [InlineData(true, false, 1, 0)]
+        [InlineData(true, true, 1, 1)]
+        public async Task GetInstalledAndTransitivePackagesAsync_InstalledAndTransitiveComputationNotNeeded_ReturnsExpectedTransitiveData(bool includeTransitivePackages, bool includeTransitiveOrigins, int transitivePackagesCount, int transitiveOriginsCount)
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+            var installedPackagesBefore = await project.GetInstalledPackagesAsync(CancellationToken.None); // This will change IsInstalledAndTransitiveComputationNeeded to false
+
+            // Act
+            ProjectPackages installedAndTransitivePackagesAfter = await project.GetInstalledAndTransitivePackagesAsync(includeTransitivePackages, includeTransitiveOrigins, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(installedAndTransitivePackagesAfter.InstalledPackages.Count, installedPackagesBefore.Count());
+            Assert.Equal(1, installedAndTransitivePackagesAfter.InstalledPackages.Count);
+            Assert.Equal(transitivePackagesCount, installedAndTransitivePackagesAfter.TransitivePackages.Count);
+            Assert.All(installedAndTransitivePackagesAfter.TransitivePackages, pkg => Assert.Equal(transitiveOriginsCount, pkg.TransitiveOrigins.Count()));
+        }
+
+        [Theory]
+        [InlineData(false, false, 0, 0)]
+        [InlineData(false, true, 0, 0)]
+        [InlineData(true, false, 1, 0)]
+        [InlineData(true, true, 1, 1)]
+        public async Task GetInstalledAndTransitivePackagesAsync_IsInstalledAndTransitiveComputationNeeded_ReturnsExpectedTransitiveData(bool includeTransitivePackages, bool includeTransitiveOrigins, int transitivePackagesCount, int transitiveOriginsCount)
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+
+            // Act
+            ProjectPackages installedAndTransitivePackages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitivePackages, includeTransitiveOrigins, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(1, installedAndTransitivePackages.InstalledPackages.Count);
+            Assert.Equal(transitivePackagesCount, installedAndTransitivePackages.TransitivePackages.Count);
+            Assert.All(installedAndTransitivePackages.TransitivePackages, pkg => Assert.Equal(transitiveOriginsCount, pkg.TransitiveOrigins.Count()));
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_IncludeTransitiveSetToTrue_WhenCacheWasCleared_ReturnsExpectedTransitiveData()
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+
+            // Act
+            ProjectPackages result = await project.GetInstalledAndTransitivePackagesAsync(true, true, CancellationToken.None);
+
+            // do a restore
+            project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+            result = await project.GetInstalledAndTransitivePackagesAsync(false, false, CancellationToken.None);
+
+            // Assert I: Cache for transitive was cleared
+            Assert.Equal(1, result.InstalledPackages.Count);
+            Assert.Equal(0, result.TransitivePackages.Count);
+            Assert.All(result.TransitivePackages, pkg => Assert.Equal(0, pkg.TransitiveOrigins.Count()));
+
+            result = await project.GetInstalledAndTransitivePackagesAsync(true, true, CancellationToken.None);
+
+            // Assert II: Transitive packages calculated correctly
+            Assert.Equal(1, result.InstalledPackages.Count);
+            Assert.Equal(1, result.TransitivePackages.Count);
+            Assert.All(result.TransitivePackages, pkg => Assert.Equal(1, pkg.TransitiveOrigins.Count()));
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsParamSetToFalse_ReturnsPackagesWithoutTransitiveOriginsAsync()
+        {
+            using SimpleTestPathContext rootDir = new();
+
+            // Arrange
+            await CreatePackagesAsync(rootDir);
+            IPackageReferenceProject project = await PrepareTestProjectAsync(rootDir);
+
+            // Act
+            ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
+
+            // Assert
+            Assert.NotEmpty(packages.InstalledPackages);
+            Assert.NotEmpty(packages.TransitivePackages);
+            Assert.All(packages.TransitivePackages, pkg => Assert.Empty(pkg.TransitiveOrigins));
         }
 
         [Fact]
@@ -3841,7 +4254,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var projectCache = new ProjectSystemCache();
                 IVsProjectAdapter projectAdapter = (new Mock<IVsProjectAdapter>()).Object;
 
-                var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
                 testSolutionManager.NuGetProjects.Add(project);
 
                 var projectNames = GetTestProjectNames(projectFullPath, projectName);
@@ -3922,9 +4335,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var projectName = "project";
             var dependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(ProjectTestHelpers.GetPackageSpec(settings, projectName, rootPath: pathContext.SolutionRoot));
             var projectFullPath = dependencyGraphSpec.Projects[0].FilePath;
-            var cpsPackageReferenceProject = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+            var cpsPackageReferenceProject = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
             testSolutionManager.NuGetProjects.Add(cpsPackageReferenceProject);
-            AddProjectDetailsToCache(projectCache, dependencyGraphSpec, cpsPackageReferenceProject, GetTestProjectNames(projectFullPath, projectName));
+            TestCpsPackageReferenceProject.AddProjectDetailsToCache(projectCache, dependencyGraphSpec, cpsPackageReferenceProject, GetTestProjectNames(projectFullPath, projectName));
 
             //  Setup expectations
             var progressReporter = new Mock<IRestoreProgressReporter>(MockBehavior.Strict);
@@ -3964,21 +4377,24 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var settings = Settings.LoadDefaultSettings(pathContext.SolutionRoot);
             var projectCache = new ProjectSystemCache();
 
+            // Child project
+            var childProject = "childProject";
+            var childProjectPackageSpec = ProjectTestHelpers.GetPackageSpec(settings, childProject, rootPath: pathContext.SolutionRoot);
+            var childDependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(childProjectPackageSpec);
+            var childProjectFullPath = childDependencyGraphSpec.Projects[0].FilePath;
+            var childPackageReferenceProject = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(childProject, childProjectFullPath, projectCache);
+
             // Parent project
             var parentProject = "parentProject";
-            var parentDependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(ProjectTestHelpers.GetPackageSpec(settings, parentProject, rootPath: pathContext.SolutionRoot));
+            var parentProjectPackageSpec = ProjectTestHelpers.GetPackageSpec(settings, parentProject, rootPath: pathContext.SolutionRoot);
+            parentProjectPackageSpec = parentProjectPackageSpec.WithTestProjectReference(childProjectPackageSpec);
+            var parentDependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(parentProjectPackageSpec);
             var parentProjectFullPath = parentDependencyGraphSpec.Projects[0].FilePath;
-            var parentPackageReferenceProject = CreateTestCpsPackageReferenceProject(parentProject, parentProjectFullPath, projectCache);
-
-            // Child project
-            var childProject = "parentProject";
-            var childDependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(ProjectTestHelpers.GetPackageSpec(settings, childProject, rootPath: pathContext.SolutionRoot));
-            var childProjectFullPath = parentDependencyGraphSpec.Projects[0].FilePath;
-            var childPackageReferenceProject = CreateTestCpsPackageReferenceProject(childProject, childProjectFullPath, projectCache);
+            var parentPackageReferenceProject = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(parentProject, parentProjectFullPath, projectCache);
 
             // Populate caches
-            AddProjectDetailsToCache(projectCache, parentDependencyGraphSpec, parentPackageReferenceProject, GetTestProjectNames(parentProjectFullPath, parentProject));
-            AddProjectDetailsToCache(projectCache, childDependencyGraphSpec, childPackageReferenceProject, GetTestProjectNames(childProjectFullPath, childProject));
+            TestCpsPackageReferenceProject.AddProjectDetailsToCache(projectCache, parentDependencyGraphSpec, parentPackageReferenceProject, GetTestProjectNames(parentProjectFullPath, parentProject));
+            TestCpsPackageReferenceProject.AddProjectDetailsToCache(projectCache, childDependencyGraphSpec, childPackageReferenceProject, GetTestProjectNames(childProjectFullPath, childProject));
             testSolutionManager.NuGetProjects.Add(parentPackageReferenceProject);
             testSolutionManager.NuGetProjects.Add(childPackageReferenceProject);
 
@@ -3990,7 +4406,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             progressReporter.Setup(e => e.EndProjectUpdate(It.Is<string>(path => path == childProjectFullPath), It.IsAny<IReadOnlyList<string>>())).Verifiable();
 
             var nuGetPackageManager = new NuGetPackageManager(sourceRepositoryProvider, settings, testSolutionManager, new TestDeleteOnRestartManager(), progressReporter.Object);
-            var actions = await nuGetPackageManager.PreviewInstallPackageAsync(parentPackageReferenceProject, packageA.Id, new ResolutionContext(), new TestNuGetProjectContext(),
+            var actions = await nuGetPackageManager.PreviewInstallPackageAsync(childPackageReferenceProject, packageA.Id, new ResolutionContext(), new TestNuGetProjectContext(),
                     sourceRepositoryProvider.GetRepositories(), sourceRepositoryProvider.GetRepositories(), CancellationToken.None);
 
             // Preconditions
@@ -3998,7 +4414,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act
             await nuGetPackageManager.ExecuteNuGetProjectActionsAsync(
-                parentPackageReferenceProject,
+                childPackageReferenceProject,
                 actions,
                 new TestNuGetProjectContext(),
                 new SourceCacheContext(),
@@ -4006,26 +4422,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Assert 
             progressReporter.VerifyAll();
-        }
-
-        private static void AddProjectDetailsToCache(ProjectSystemCache projectCache, DependencyGraphSpec parentDependencyGraphSpec, TestCpsPackageReferenceProject parentPackageReferenceProject, ProjectNames parentProjectNames)
-        {
-            projectCache.AddProjectRestoreInfo(parentProjectNames, parentDependencyGraphSpec, new List<IAssetsLogMessage>());
-            projectCache.AddProject(parentProjectNames, vsProjectAdapter: (new Mock<IVsProjectAdapter>()).Object, parentPackageReferenceProject).Should().BeTrue();
-        }
-
-        private TestCpsPackageReferenceProject CreateTestCpsPackageReferenceProject(string projectName, string projectFullPath, ProjectSystemCache projectSystemCache, TestProjectSystemServices projectServices = null)
-        {
-            projectServices = projectServices == null ? new TestProjectSystemServices() : projectServices;
-
-            return new TestCpsPackageReferenceProject(
-                    projectName: projectName,
-                    projectUniqueName: projectName,
-                    projectFullPath: projectFullPath,
-                    projectSystemCache: projectSystemCache,
-                    unconfiguredProject: null,
-                    projectServices: projectServices,
-                    projectId: projectName);
         }
 
         private static PackageSpec GetPackageSpecNoPackages(string projectName, string testDirectory)
@@ -4069,178 +4465,20 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             return JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, testDirectory).WithTestRestoreMetadata();
         }
 
-        private class TestCpsPackageReferenceProject
-            : CpsPackageReferenceProject
-            , IProjectScriptHostService
-            , IProjectSystemReferencesReader
+        private static async Task TestTransitiveOriginsAlternateAsync(IPackageReferenceProject project)
         {
-            public HashSet<PackageIdentity> ExecuteInitScriptAsyncCalls { get; }
-                = new HashSet<PackageIdentity>(PackageIdentity.Comparer);
-
-            public List<TestExternalProjectReference> ProjectReferences { get; }
-                = new List<TestExternalProjectReference>();
-
-            public bool IsCacheEnabled { get; set; }
-
-            public bool IsNu1605Error { get; set; }
-
-            public HashSet<PackageSource> ProjectLocalSources { get; set; } = new HashSet<PackageSource>();
-
-            public TestCpsPackageReferenceProject(
-                string projectName,
-                string projectUniqueName,
-                string projectFullPath,
-                IProjectSystemCache projectSystemCache,
-                UnconfiguredProject unconfiguredProject,
-                INuGetProjectServices projectServices,
-                string projectId)
-                : base(projectName, projectUniqueName, projectFullPath, projectSystemCache, unconfiguredProject, projectServices, projectId)
-            {
-                ProjectServices = projectServices;
-            }
-
-            public override string MSBuildProjectPath => base.MSBuildProjectPath;
-
-            public override string ProjectName => base.ProjectName;
-
-            public override async Task<IReadOnlyList<PackageSpec>> GetPackageSpecsAsync(DependencyGraphCacheContext context)
-            {
-                var packageSpecs = await base.GetPackageSpecsAsync(context);
-
-                if (IsNu1605Error)
-                {
-                    foreach (var packageSpec in packageSpecs)
-                    {
-                        if (packageSpec?.RestoreMetadata != null)
-                        {
-                            var allWarningsAsErrors = false;
-                            var noWarn = new HashSet<NuGetLogCode>();
-                            var warnAsError = new HashSet<NuGetLogCode>();
-
-                            if (packageSpec.RestoreMetadata.ProjectWideWarningProperties != null)
-                            {
-                                var warningProperties = packageSpec.RestoreMetadata.ProjectWideWarningProperties;
-                                allWarningsAsErrors = warningProperties.AllWarningsAsErrors;
-                                warnAsError.AddRange<NuGetLogCode>(warningProperties.WarningsAsErrors);
-                                noWarn.AddRange<NuGetLogCode>(warningProperties.NoWarn);
-                            }
-
-                            warnAsError.Add(NuGetLogCode.NU1605);
-                            noWarn.Remove(NuGetLogCode.NU1605);
-
-                            packageSpec.RestoreMetadata.ProjectWideWarningProperties = new WarningProperties(warnAsError, noWarn, allWarningsAsErrors);
-
-                            packageSpec?.RestoreMetadata.Sources.AddRange(new List<PackageSource>(ProjectLocalSources));
-                        }
-                    }
-                }
-
-                return packageSpecs;
-            }
-
-            public Task ExecutePackageScriptAsync(PackageIdentity packageIdentity, string packageInstallPath, string scriptRelativePath, INuGetProjectContext projectContext, bool throwOnFailure, CancellationToken token)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<bool> ExecutePackageInitScriptAsync(PackageIdentity packageIdentity, string packageInstallPath, INuGetProjectContext projectContext, bool throwOnFailure, CancellationToken token)
-            {
-                ExecuteInitScriptAsyncCalls.Add(packageIdentity);
-                return Task.FromResult(true);
-            }
-
-            public Task<IEnumerable<LibraryDependency>> GetPackageReferencesAsync(NuGetFramework targetFramework, CancellationToken token)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<IEnumerable<ProjectRestoreReference>> GetProjectReferencesAsync(ILogger logger, CancellationToken token)
-            {
-                var projectRefs = ProjectReferences.Select(e => new ProjectRestoreReference()
-                {
-                    ProjectUniqueName = e.MSBuildProjectPath,
-                    ProjectPath = e.MSBuildProjectPath,
-                });
-
-                return Task.FromResult(projectRefs);
-            }
-
-            public override Task PreProcessAsync(INuGetProjectContext nuGetProjectContext, CancellationToken token)
-            {
-                return base.PreProcessAsync(nuGetProjectContext, token);
-            }
-
-            public override Task PostProcessAsync(INuGetProjectContext nuGetProjectContext, CancellationToken token)
-            {
-                return base.PostProcessAsync(nuGetProjectContext, token);
-            }
-
-            public override Task<string> GetAssetsFilePathAsync()
-            {
-                return base.GetAssetsFilePathAsync();
-            }
-
-            public override Task<string> GetAssetsFilePathOrNullAsync()
-            {
-                return base.GetAssetsFilePathOrNullAsync();
-            }
-
-            public override Task AddFileToProjectAsync(string filePath)
-            {
-                return base.AddFileToProjectAsync(filePath);
-            }
-
-            public override Task<(IReadOnlyList<PackageSpec> dgSpecs, IReadOnlyList<IAssetsLogMessage> additionalMessages)> GetPackageSpecsAndAdditionalMessagesAsync(DependencyGraphCacheContext context)
-            {
-                return base.GetPackageSpecsAndAdditionalMessagesAsync(context);
-            }
-
-            public override async Task<bool> InstallPackageAsync(string packageId, VersionRange range, INuGetProjectContext nuGetProjectContext, BuildIntegratedInstallationContext installationContext, CancellationToken token)
-            {
-                var dependency = new LibraryDependency
-                {
-                    LibraryRange = new LibraryRange(
-                        name: packageId,
-                        versionRange: range,
-                        typeConstraint: LibraryDependencyTarget.Package),
-                    SuppressParent = installationContext.SuppressParent,
-                    IncludeType = installationContext.IncludeType
-                };
-
-                await ProjectServices.References.AddOrUpdatePackageReferenceAsync(dependency, token);
-
-                return true;
-            }
-
-            public override async Task<bool> UninstallPackageAsync(PackageIdentity packageIdentity, INuGetProjectContext nuGetProjectContext, CancellationToken token)
-            {
-                await ProjectServices.References.RemovePackageReferenceAsync(packageIdentity.Id);
-
-                return true;
-            }
-
-            public override Task<string> GetCacheFilePathAsync()
-            {
-                return base.GetCacheFilePathAsync();
-            }
-        }
-
-        private class TestExternalProjectReference
-        {
-            public IDependencyGraphProject Project { get; set; }
-
-            public IDependencyGraphProject[] Children { get; set; }
-
-            public TestExternalProjectReference(
-                IDependencyGraphProject project,
-                params IDependencyGraphProject[] children)
-            {
-                Project = project;
-                Children = children;
-                MSBuildProjectPath = project.MSBuildProjectPath;
-            }
-
-            public string MSBuildProjectPath { get; set; }
+            // Act I: Transitive packages without transitive origins
+            ProjectPackages packagesWithoutOrigins = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
+            // Assert I
+            Assert.NotEmpty(packagesWithoutOrigins.InstalledPackages);
+            Assert.NotEmpty(packagesWithoutOrigins.TransitivePackages);
+            Assert.All(packagesWithoutOrigins.TransitivePackages, pkg => Assert.Empty(pkg.TransitiveOrigins));
+            // Act II: Transitive packages with transitive origins
+            ProjectPackages packagesWithOrigins = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+            // Assert II
+            Assert.NotEmpty(packagesWithOrigins.InstalledPackages);
+            Assert.NotEmpty(packagesWithOrigins.TransitivePackages);
+            Assert.All(packagesWithOrigins.TransitivePackages, pkg => Assert.NotEmpty(pkg.TransitiveOrigins));
         }
     }
 }

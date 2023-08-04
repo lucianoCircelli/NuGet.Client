@@ -16,6 +16,7 @@ using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.PackageManagement;
 using NuGet.PackageManagement.VisualStudio;
+using NuGet.PackageManagement.VisualStudio.Exceptions;
 using NuGet.Packaging;
 using NuGet.Packaging.PackageExtraction;
 using NuGet.Packaging.Signing;
@@ -67,7 +68,7 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
             using var _ = NuGetETW.ExtensibilityEventSource.StartStopEvent(eventName);
             try
             {
-                var packages = new HashSet<IVsPackageMetadata>(new VsPackageMetadataComparer());
+                var packages = new HashSet<IVsPackageMetadata>(VsPackageMetadataComparer.Instance);
 
                 return _threadingService.JoinableTaskFactory.Run(async delegate
                     {
@@ -125,6 +126,10 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
 
                         return packages;
                     });
+            }
+            catch (ProjectNotNominatedException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -266,6 +271,10 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
                         return packages;
                     });
             }
+            catch (ProjectNotNominatedException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 _telemetryProvider.PostFault(exception, typeof(VsPackageInstallerServices).FullName);
@@ -350,6 +359,10 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
                     IEnumerable<PackageReference> installedPackageReferences = await GetInstalledPackageReferencesAsync(project);
 
                     return PackageServiceUtilities.IsPackageInList(installedPackageReferences, packageId, nugetVersion);
+                }
+                catch (ProjectNotNominatedException)
+                {
+                    throw;
                 }
                 catch (Exception exception)
                 {

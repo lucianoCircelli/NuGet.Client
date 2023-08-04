@@ -214,6 +214,15 @@ namespace NuGet.Protocol {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to {0} {1} {2}ms (retry after: {3}s).
+        /// </summary>
+        internal static string Http_ResponseLogWithRetryAfter {
+            get {
+                return ResourceManager.GetString("Http_ResponseLogWithRetryAfter", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The HTTP request to &apos;{0} {1}&apos; has timed out after {2}ms..
         /// </summary>
         internal static string Http_Timeout {
@@ -957,6 +966,87 @@ namespace NuGet.Protocol {
         internal static string UnableToParseFolderV3Version {
             get {
                 return ResourceManager.GetString("UnableToParseFolderV3Version", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package source &apos;{0}&apos; has {1} vulnerability data pages. Using the first {2}..
+        /// </summary>
+        internal static string Vulnerability_TooManyPages {
+            get {
+                return ResourceManager.GetString("Vulnerability_TooManyPages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package source &apos;{0}&apos; vulnerability data index &apos;{1}&apos; could not be loaded. This indicates a problem with the JSON file contents returned from the server..
+        /// </summary>
+        internal static string VulnerabilityPage_CouldNotLoad {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_CouldNotLoad", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page index {0} does not contain a name (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_HasNoName {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_HasNoName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page index {0} contains invalid characters (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NameHasInvalidCharacters {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NameHasInvalidCharacters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page name &apos;{0}&apos; is not unique. Only using the first (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NameNotUnique {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NameNotUnique", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page index {0} name is longer than {1} characters (Source: &apos;{2}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NameTooLong {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NameTooLong", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page &apos;{0}&apos; does not contain a URL (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NoUrl {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NoUrl", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page &apos;{0}&apos; contains URL that is not http(s) (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_UrlNotHttp {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_UrlNotHttp", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source, &apos;{1}&apos;. Non-HTTPS access will be removed in a future version. Consider migrating to an &apos;HTTPS&apos; source..
+        /// </summary>
+        internal static string Warning_HttpServerUsage {
+            get {
+                return ResourceManager.GetString("Warning_HttpServerUsage", resourceCulture);
             }
         }
         

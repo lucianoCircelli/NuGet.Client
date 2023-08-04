@@ -28,6 +28,7 @@ namespace NuGet.Protocol
         private readonly SemaphoreSlim _httpClientLock = new SemaphoreSlim(1, 1);
         private Dictionary<string, AmbientAuthenticationState> _authStates = new Dictionary<string, AmbientAuthenticationState>();
         private HttpSourceCredentials _credentials;
+        private bool _isDisposed = false;
 
         public HttpSourceAuthenticationHandler(
             PackageSource packageSource,
@@ -66,6 +67,11 @@ namespace NuGet.Protocol
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(objectName: null); // we don't know the caller name
+            }
+
             HttpResponseMessage response = null;
             ICredentials promptCredentials = null;
 
@@ -151,7 +157,7 @@ namespace NuGet.Protocol
         private async Task<ICredentials> AcquireCredentialsAsync(HttpStatusCode statusCode, Guid credentialsVersion, ILogger log, CancellationToken cancellationToken)
         {
             // Only one request may prompt and attempt to auth at a time
-            await _httpClientLock.WaitAsync();
+            await _httpClientLock.WaitAsync(cancellationToken);
 
             try
             {
@@ -238,7 +244,7 @@ namespace NuGet.Protocol
             ICredentials promptCredentials;
 
             // Only one prompt may display at a time.
-            await _credentialPromptLock.WaitAsync();
+            await _credentialPromptLock.WaitAsync(token);
 
             try
             {
@@ -287,6 +293,26 @@ namespace NuGet.Protocol
         private void CredentialsSuccessfullyUsed(Uri uri, ICredentials credentials)
         {
             HttpHandlerResourceV3.CredentialsSuccessfullyUsed?.Invoke(uri, credentials);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                // free managed resources
+                _httpClientLock.Dispose();
+                _authStates = null;
+                _credentials = null;
+            }
+
+            _isDisposed = true;
         }
     }
 }

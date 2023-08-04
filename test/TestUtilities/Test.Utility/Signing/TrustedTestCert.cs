@@ -2,11 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.IO;
 using System.Security.Cryptography.X509Certificates;
-using System.Threading;
-using NuGet.Common;
-using NuGet.Test.Utility;
 
 namespace Test.Utility.Signing
 {
@@ -14,6 +10,7 @@ namespace Test.Utility.Signing
     {
         public static TrustedTestCert<X509Certificate2> Create(
             X509Certificate2 cert,
+            X509StorePurpose storePurpose,
             StoreName storeName = StoreName.TrustedPeople,
             StoreLocation storeLocation = StoreLocation.CurrentUser,
             TimeSpan? maximumValidityPeriod = null)
@@ -21,6 +18,23 @@ namespace Test.Utility.Signing
             return new TrustedTestCert<X509Certificate2>(
                 cert,
                 x => x,
+                storePurpose,
+                storeName,
+                storeLocation,
+                maximumValidityPeriod);
+        }
+
+        public static TrustedTestCert<X509Certificate2> Create(
+            X509Certificate2 cert,
+            X509StorePurpose[] storePurposes,
+            StoreName storeName = StoreName.TrustedPeople,
+            StoreLocation storeLocation = StoreLocation.CurrentUser,
+            TimeSpan? maximumValidityPeriod = null)
+        {
+            return new TrustedTestCert<X509Certificate2>(
+                cert,
+                x => x,
+                storePurposes,
                 storeName,
                 storeLocation,
                 maximumValidityPeriod);
@@ -32,8 +46,6 @@ namespace Test.Utility.Signing
     /// </summary>
     public class TrustedTestCert<T> : IDisposable
     {
-        private X509Store _store;
-
         public X509Certificate2 TrustedCert { get; }
 
         public T Source { get; }
@@ -42,22 +54,48 @@ namespace Test.Utility.Signing
 
         public StoreLocation StoreLocation { get; }
 
+        private readonly X509StorePurpose[] _storePurposes;
         private bool _isDisposed;
 
-        private const string KeychainForMac = "/Library/Keychains/System.keychain";
-
-        //Macos-11.6 (Big Sur) has different security settings and permissions
-        //This command will bypass a popup asking for unlocking a keychain.
-        private const string BypassGUICommandForMac = "sudo security authorizationdb write com.apple.trust-settings.admin allow";
-
-        public TrustedTestCert(T source,
+        [Obsolete("Use the constructor that takes an X.509 store purpose.")]
+        public TrustedTestCert(
+            T source,
             Func<T, X509Certificate2> getCert,
+            StoreName storeName = StoreName.TrustedPeople,
+            StoreLocation storeLocation = StoreLocation.CurrentUser,
+            TimeSpan? maximumValidityPeriod = null)
+            : this(source, getCert, X509StorePurpose.CodeSigning, storeName, storeLocation, maximumValidityPeriod)
+        {
+        }
+
+        public TrustedTestCert(
+            T source,
+            Func<T, X509Certificate2> getCert,
+            X509StorePurpose storePurpose,
+            StoreName storeName = StoreName.TrustedPeople,
+            StoreLocation storeLocation = StoreLocation.CurrentUser,
+            TimeSpan? maximumValidityPeriod = null)
+            : this(source, getCert, new X509StorePurpose[] { storePurpose }, storeName, storeLocation, maximumValidityPeriod)
+        {
+        }
+
+        public TrustedTestCert(
+            T source,
+            Func<T, X509Certificate2> getCert,
+            X509StorePurpose[] storePurposes,
             StoreName storeName = StoreName.TrustedPeople,
             StoreLocation storeLocation = StoreLocation.CurrentUser,
             TimeSpan? maximumValidityPeriod = null)
         {
             Source = source;
             TrustedCert = getCert(source);
+
+            if (storePurposes is null || storePurposes.Length == 0)
+            {
+                throw new ArgumentException("Invalid store purpose", nameof(storePurposes));
+            }
+
+            _storePurposes = storePurposes;
 
             if (!maximumValidityPeriod.HasValue)
             {
@@ -73,111 +111,12 @@ namespace Test.Utility.Signing
             StoreName = storeName;
             StoreLocation = storeLocation;
 
-            // According to https://github.com/dotnet/runtime/blob/master/docs/design/features/cross-platform-cryptography.md#x509store,
-            // on macOS, when StoreName = My, StoreLocation = CurrentUser, the X509Store is read/write. 
-            // For other cases, the X509Store is read-only, writing will throw CryptographicException.
-            if ((RuntimeEnvironmentHelper.IsMacOSX && storeName.Equals(StoreName.My) && storeLocation.Equals(StoreLocation.CurrentUser)) || !RuntimeEnvironmentHelper.IsMacOSX)
+            foreach (X509StorePurpose storePurpose in _storePurposes)
             {
-                AddCertificateToStore();
-            }
-            else
-            {
-                AddCertificateToStoreForMacOSX();
+                X509StoreUtilities.AddCertificateToStore(StoreLocation, StoreName, TrustedCert, storePurpose);
             }
 
             ExportCrl();
-        }
-
-        private void AddCertificateToStore()
-        {
-            _store = new X509Store(StoreName, StoreLocation);
-            _store.Open(OpenFlags.ReadWrite);
-            _store.Add(TrustedCert);
-
-            //Add wait for Linux, as https://github.com/dotnet/runtime/issues/32608
-            //Windows has a live-synchronized model, and on Linux, there is a filesystem/rescan delay problem.
-            //For performance reasons, dotnet/runtime only check to see if the store has been modified once a second.
-            if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                Thread.Sleep(1500);
-
-                var MaxTries = 30;
-
-                for (var i = 0; i < MaxTries; i++)
-                {
-                    using (var chain = new X509Chain())
-                    {
-                        chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
-
-                        if (chain.Build(TrustedCert))
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            Thread.Sleep(1000);
-                        }
-                    }
-                }
-            }
-        }
-
-        //According to https://github.com/dotnet/runtime/blob/master/docs/design/features/cross-platform-cryptography.md#x509store,
-        //on macOS the X509Store class is a projection of system trust decisions (read-only), user trust decisions (read-only), and user key storage (read-write).
-        //So we have to run command to add certificate to System.keychain to make it trusted.
-        private void AddCertificateToStoreForMacOSX()
-        {
-            var certFile = new FileInfo(Path.Combine("/tmp", $"{TrustedCert.Thumbprint}.cer"));
-
-            File.WriteAllBytes(certFile.FullName, TrustedCert.RawData);
-
-            RunMacCommand(BypassGUICommandForMac);
-
-            string addToKeyChainCmd = $"sudo security add-trusted-cert -d -r trustRoot " +
-                                      $"-k \"{KeychainForMac}\" " +
-                                      $"\"{certFile.FullName}\"";
-
-            RunMacCommand(addToKeyChainCmd);
-        }
-
-        //According to https://github.com/dotnet/runtime/blob/master/docs/design/features/cross-platform-cryptography.md#x509store,
-        //on macOS the X509Store class is a projection of system trust decisions (read-only), user trust decisions (read-only), and user key storage (read-write).
-        //So we have to run command to remove certificate from System.keychain to make it untrusted.
-        private void RemoveTrustedCert()
-        {
-            var certFile = new FileInfo(Path.Combine("/tmp", $"{TrustedCert.Thumbprint}.cer"));
-
-            string removeFromKeyChainCmd = $"sudo security delete-certificate -Z {TrustedCert.Thumbprint}  \"{KeychainForMac}\"";
-
-            try
-            {
-                RunMacCommand(BypassGUICommandForMac);
-                RunMacCommand(removeFromKeyChainCmd);
-            }
-            finally
-            {
-                certFile.Delete();
-            }
-        }
-
-        private static void RunMacCommand(string cmd)
-        {
-            string workingDirectory = "/bin";
-            string args = "-c \"" + cmd + "\"";
-
-            CommandRunnerResult result = CommandRunner.Run("/bin/bash",
-                workingDirectory,
-                args,
-                waitForExit: true,
-                timeOutInMilliseconds: 60000);
-
-            if (!result.Success)
-            {
-                throw new SystemToolException($"Run security command failed with following log information :\n" +
-                                              $"exit code   = {result.ExitCode} \n" +
-                                              $"exit output = {result.Output} \n" +
-                                              $"exit error  = {result.Errors} \n");
-            }
         }
 
         private void ExportCrl()
@@ -204,21 +143,16 @@ namespace Test.Utility.Signing
         {
             if (!_isDisposed)
             {
-                if ((RuntimeEnvironmentHelper.IsMacOSX && StoreName.Equals(StoreName.My) && StoreLocation.Equals(StoreLocation.CurrentUser)) || !RuntimeEnvironmentHelper.IsMacOSX)
+                foreach (X509StorePurpose storePurpose in _storePurposes)
                 {
-                    using (_store)
-                    {
-                        _store.Remove(TrustedCert);
-                    }
-                }
-                else
-                {
-                    RemoveTrustedCert();
+                    X509StoreUtilities.RemoveCertificateFromStore(StoreLocation, StoreName, TrustedCert, storePurpose);
                 }
 
                 DisposeCrl();
 
                 TrustedCert.Dispose();
+
+                GC.SuppressFinalize(this);
 
                 _isDisposed = true;
             }

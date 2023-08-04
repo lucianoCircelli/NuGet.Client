@@ -1,2 +1,4 @@
-static NuGet.Configuration.SettingsUtility.GetUpdatePackageLastAccessTimeEnabledStatus(NuGet.Configuration.ISettings settings) -> bool
-static readonly NuGet.Configuration.ConfigurationConstants.UpdatePackageLastAccessTime -> string
+#nullable enable
+NuGet.Configuration.PackageSourceMappingProvider.ShouldSkipSave.get -> bool
+NuGet.Configuration.PackageSourceMapping.SearchForPattern(string! packageId) -> string?
+~NuGet.Configuration.PackageSourceMappingProvider.PackageSourceMappingProvider(NuGet.Configuration.ISettings settings, bool shouldSkipSave) -> void

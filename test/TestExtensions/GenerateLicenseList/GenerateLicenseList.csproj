@@ -1,7 +1,4 @@
-﻿<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <SkipShared>true</SkipShared>
     <OutputType>Exe</OutputType>
@@ -15,12 +12,4 @@
     <PackageReference Include="Microsoft.CodeAnalysis" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
   </ItemGroup>
-
-  <Import Project="$(BuildCommonDirectory)common.targets"/>
-
-  <!-- There are some conflicts that are impossible to resolve because of missing package versions-->
-  <ItemGroup Condition=" '$(SkipCentralPackageVersions)' != 'true' ">
-    <PackageReference Update="Microsoft.CodeAnalysis.CSharp" Version="3.0.0" />
-  </ItemGroup>
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

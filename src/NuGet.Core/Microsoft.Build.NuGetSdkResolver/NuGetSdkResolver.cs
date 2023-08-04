@@ -15,6 +15,7 @@ using NuGet.Configuration;
 using NuGet.Credentials;
 using NuGet.LibraryModel;
 using NuGet.Packaging;
+using NuGet.Packaging.Signing;
 using NuGet.Versioning;
 
 namespace Microsoft.Build.NuGetSdkResolver
@@ -72,15 +73,24 @@ namespace Microsoft.Build.NuGetSdkResolver
             // Escape hatch to disable this resolver
             if (DisableNuGetSdkResolver.Value)
             {
-                return null;
+                // Errors returned to MSBuild aren't logged if another SDK resolver succeeds.  Returning errors on non-succcess is
+                // what all SDK resolvers should be doing and if no SDK resolver succeeds then MSBuild logs all of the errors as
+                // one.  In this case, the SDK resolver is disabled and it might be helpful for a user to see that they've disabled
+                // it in case it was a mistake.
+                return factory.IndicateFailure(errors: new List<string>() { Strings.Error_DisabledSdkResolver }, warnings: null);
             }
 
             // This resolver only works if the user specifies a version in a project or a global.json.
             // Ignore invalid versions, there may be another resolver that can handle the version specified
             if (!TryGetNuGetVersionForSdk(sdkReference.Name, sdkReference.Version, resolverContext, out var parsedSdkVersion))
             {
-                return null;
+                // Errors returned to MSBuild aren't logged if another SDK resolver succeeds.  Returning errors on non-succcess is
+                // what all SDK resolvers should be doing and if no SDK resolver succeeds then MSBuild logs all of the errors as
+                // one.  In this case, the user might have mispelled global.json or the SDK name in global.json.
+                return factory.IndicateFailure(errors: new List<string>() { Strings.Error_NoSdkVersion }, warnings: null);
             }
+
+            NuGet.Common.Migrations.MigrationRunner.Run();
 
             return NuGetAbstraction.GetSdkResult(sdkReference, parsedSdkVersion, resolverContext, factory);
         }
@@ -127,17 +137,27 @@ namespace Microsoft.Build.NuGetSdkResolver
         {
             public static SdkResult GetSdkResult(SdkReference sdk, object nuGetVersion, SdkResolverContext context, SdkResultFactory factory)
             {
+                var logger = new NuGetSdkLogger(context.Logger);
+
                 // Cast the NuGet version since the caller does not want to consume NuGet classes directly
                 var parsedSdkVersion = (NuGetVersion)nuGetVersion;
 
                 // Load NuGet settings and a path resolver
-                ISettings settings = Settings.LoadDefaultSettings(context.ProjectFilePath, configFileName: null, MachineWideSettings.Value as IMachineWideSettings, SettingsLoadContext.Value as SettingsLoadingContext);
+                ISettings settings;
+                try
+                {
+                    settings = Settings.LoadDefaultSettings(context.ProjectFilePath, configFileName: null, MachineWideSettings.Value as IMachineWideSettings, SettingsLoadContext.Value as SettingsLoadingContext);
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(string.Format(CultureInfo.CurrentCulture, Strings.Error_FailedToReadSettings, e.Message));
+
+                    return factory.IndicateFailure(logger.Errors, logger.Warnings);
+                }
 
                 var fallbackPackagePathResolver = new FallbackPackagePathResolver(NuGetPathContext.Create(settings));
 
                 var libraryIdentity = new LibraryIdentity(sdk.Name, parsedSdkVersion, LibraryType.Package);
-
-                var logger = new NuGetSdkLogger(context.Logger);
 
                 // Attempt to find a package if its already installed
                 if (!TryGetMSBuildSdkPackageInfo(fallbackPackagePathResolver, libraryIdentity, out var installedPath, out var installedVersion))
@@ -145,6 +165,10 @@ namespace Microsoft.Build.NuGetSdkResolver
                     try
                     {
                         DefaultCredentialServiceUtility.SetupDefaultCredentialService(logger, nonInteractive: !context.Interactive);
+
+#if !NETFRAMEWORK
+                        X509TrustStore.InitializeForDotNetSdk(logger);
+#endif
 
                         // Asynchronously run the restore without a commit which find the package on configured feeds, download, and unzip it without generating any other files
                         // This must be run in its own task because legacy project system evaluates projects on the UI thread which can cause RunWithoutCommit() to deadlock

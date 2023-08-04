@@ -2,8 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading;
+using NuGet.Common;
 
 namespace NuGet.CommandLine.Test
 {
@@ -26,7 +28,7 @@ namespace NuGet.CommandLine.Test
             {
                 bool owner = _mutex.WaitOne(TimeSpan.FromMinutes(2));
                 if (!owner)
-                    throw new TimeoutException(string.Format("Timedout while waiting for mutex {0}", MutexName));
+                    throw new TimeoutException(string.Format(CultureInfo.CurrentCulture, "Timedout while waiting for mutex {0}", MutexName));
             }
 
             BackupAndDeleteDefaultConfigurationFile();
@@ -60,8 +62,7 @@ namespace NuGet.CommandLine.Test
 
         private static void BackupAndDeleteDefaultConfigurationFile()
         {
-            string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string defaultConfigurationFile = Path.Combine(appDataPath, "NuGet", "NuGet.Config");
+            string defaultConfigurationFile = Path.Combine(NuGetEnvironment.GetFolderPath(NuGetFolderPath.UserSettingsDirectory), "NuGet.Config");
             string backupFileName = defaultConfigurationFile + ".backup";
 
             if (File.Exists(defaultConfigurationFile))
@@ -73,8 +74,7 @@ namespace NuGet.CommandLine.Test
 
         private static void RestoreDefaultConfigurationFile()
         {
-            string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string defaultConfigurationFile = Path.Combine(appDataPath, "NuGet", "NuGet.Config");
+            string defaultConfigurationFile = Path.Combine(NuGetEnvironment.GetFolderPath(NuGetFolderPath.UserSettingsDirectory), "NuGet.Config");
             string backupFileName = defaultConfigurationFile + ".backup";
 
             if (File.Exists(backupFileName))

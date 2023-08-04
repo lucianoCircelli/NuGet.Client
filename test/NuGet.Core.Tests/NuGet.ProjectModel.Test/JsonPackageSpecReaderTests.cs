@@ -606,6 +606,10 @@ namespace NuGet.ProjectModel.Test
       ""warnAsError"": [
         ""NU1500"",
         ""NU1501""
+      ],
+      ""warnNotAsError"": [
+        ""NU1801"",
+        ""NU1802""
       ]
     }
   }
@@ -625,6 +629,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(2, warningProperties.WarningsAsErrors.Count);
             Assert.True(warningProperties.WarningsAsErrors.Contains(NuGetLogCode.NU1500));
             Assert.True(warningProperties.WarningsAsErrors.Contains(NuGetLogCode.NU1501));
+            Assert.Equal(2, warningProperties.WarningsNotAsErrors.Count);
+            Assert.True(warningProperties.WarningsNotAsErrors.Contains(NuGetLogCode.NU1801));
+            Assert.True(warningProperties.WarningsNotAsErrors.Contains(NuGetLogCode.NU1802));
         }
 
         [Fact]
@@ -3176,7 +3183,8 @@ namespace NuGet.ProjectModel.Test
             var expectedResult = new WarningProperties(
                 new HashSet<NuGetLogCode>() { NuGetLogCode.NU3000 },
                 new HashSet<NuGetLogCode>() { NuGetLogCode.NU3001 },
-                allWarningsAsErrors: true);
+                allWarningsAsErrors: true,
+                new HashSet<NuGetLogCode>());
             var json = $"{{\"restore\":{{\"warningProperties\":{{\"allWarningsAsErrors\":{expectedResult.AllWarningsAsErrors.ToString().ToLowerInvariant()}," +
                 $"\"warnAsError\":[\"{expectedResult.WarningsAsErrors.Single()}\"],\"noWarn\":[\"{expectedResult.NoWarn.Single()}\"]}}}}}}";
             PackageSpec packageSpec = GetPackageSpec(json);
@@ -3250,7 +3258,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void GetPackageSpec_WhenRuntimesValueIsEmptyObject_ReturnsRuntimes()
         {
-            var expectedResult = new RuntimeGraph();
+            var expectedResult = RuntimeGraph.Empty;
             const string json = "{\"runtimes\":{}}";
             PackageSpec packageSpec = GetPackageSpec(json);
 
@@ -3307,7 +3315,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void GetPackageSpec_WhenSupportsValueIsEmptyObject_ReturnsSupports()
         {
-            var expectedResult = new RuntimeGraph();
+            var expectedResult = RuntimeGraph.Empty;
             const string json = "{\"supports\":{}}";
             PackageSpec packageSpec = GetPackageSpec(json);
 
@@ -3515,7 +3523,7 @@ namespace NuGet.ProjectModel.Test
                     {
                         var dependencies = new List<LibraryDependency>();
                         NuGetFramework framework = NuGetFramework.Parse(frameworkPropertyName);
-                        JsonPackageSpecReader.ReadCentralTransitveDependencyGroup(
+                        JsonPackageSpecReader.ReadCentralTransitiveDependencyGroup(
                             jsonReader: jsonReader,
                             results: dependencies,
                             packageSpecPath: "SomePath");

@@ -105,7 +105,7 @@ namespace NuGet.PackageManagement
                 {
                     configuredPackageSources = downloadContext.PackageSourceMapping.GetConfiguredPackageSources(packageIdentity.Id);
 
-                    if (configuredPackageSources != null)
+                    if (configuredPackageSources.Count > 0)
                     {
                         var packageSourcesAtPrefix = string.Join(", ", configuredPackageSources);
                         logger.LogDebug(StringFormatter.Log_PackageSourceMappingMatchFound(packageIdentity.Id, packageSourcesAtPrefix));
@@ -183,7 +183,7 @@ namespace NuGet.PackageManagement
                                     {
                                         linkedTokenSource.Dispose();
                                     }
-                                });
+                                }, token);
                             }
 
                             return completedTask.Result;

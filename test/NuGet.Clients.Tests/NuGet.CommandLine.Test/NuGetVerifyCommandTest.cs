@@ -28,12 +28,11 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.Equal(_failureCode, result.Item1);
-                Assert.Contains("Verification type not supported.", result.Item3);
+                Assert.Equal(_failureCode, result.ExitCode);
+                Assert.Contains("Verification type not supported.", result.Errors);
             }
         }
 
@@ -49,8 +48,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 if (RuntimeEnvironmentHelper.IsMono)
@@ -61,8 +59,8 @@ namespace NuGet.CommandLine.Test
                 }
                 else
                 {
-                    Assert.Equal(_failureCode, result.Item1);
-                    Assert.Contains("File does not exist", result.Item3);
+                    Assert.Equal(_failureCode, result.ExitCode);
+                    Assert.Contains("File does not exist", result.Errors);
                 }
             }
         }
@@ -83,8 +81,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetExe,
                     packageFile.Directory.FullName,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 if (RuntimeEnvironmentHelper.IsMono)
                 {

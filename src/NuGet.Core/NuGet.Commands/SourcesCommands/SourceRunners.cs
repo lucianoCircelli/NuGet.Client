@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -25,7 +26,7 @@ namespace NuGet.Commands
                 int i = 1;
                 while (true)
                 {
-                    var defaultNameToUse = defaultNamePrefix + i.ToString();
+                    var defaultNameToUse = defaultNamePrefix + i.ToString(CultureInfo.CurrentCulture);
                     if (!namesSet.Contains(defaultNameToUse))
                     {
                         args.Name = defaultNameToUse;
@@ -34,7 +35,7 @@ namespace NuGet.Commands
                     i++;
                 }
             }
-            else if (string.Equals(args.Name, Strings.ReservedPackageNameAll))
+            else if (string.Equals(args.Name, Strings.ReservedPackageNameAll, StringComparison.Ordinal))
             {
                 throw new CommandException(Strings.SourcesCommandAllNameIsReserved);
             }
@@ -61,6 +62,15 @@ namespace NuGet.Commands
             }
 
             var newPackageSource = new Configuration.PackageSource(args.Source, args.Name);
+
+            if (newPackageSource.IsHttp && !newPackageSource.IsHttps)
+            {
+                getLogger().LogWarning(
+                    string.Format(CultureInfo.CurrentCulture,
+                        Strings.Warning_HttpServerUsage,
+                        "add source",
+                        args.Source));
+            }
 
             if (!string.IsNullOrEmpty(args.Username))
             {
@@ -138,13 +148,16 @@ namespace NuGet.Commands
                             var namePadding = new string(' ', i >= 9 ? 1 : 2);
 
                             getLogger().LogMinimal(string.Format(
+                                CultureInfo.CurrentCulture,
                                 "  {0}.{1}{2} [{3}]",
                                 indexNumber,
                                 namePadding,
                                 source.Name,
                                 source.IsEnabled ? string.Format(CultureInfo.CurrentCulture, Strings.SourcesCommandEnabled) : string.Format(CultureInfo.CurrentCulture, Strings.SourcesCommandDisabled)));
-                            getLogger().LogMinimal(string.Format("{0}{1}", sourcePadding, source.Source));
+                            getLogger().LogMinimal(string.Format(CultureInfo.CurrentCulture, "{0}{1}", sourcePadding, source.Source));
                         }
+
+                        WarnForHttpSources(sourcesList, getLogger);
                     }
                     break;
                 case SourcesListFormat.Short:
@@ -169,11 +182,49 @@ namespace NuGet.Commands
                             legend += " ";
                             getLogger().LogMinimal(legend + source.Source);
                         }
+
+                        WarnForHttpSources(sourcesList, getLogger);
                     }
                     break;
                 case SourcesListFormat.None:
                     // This validation could move to the Command or Args and be code-generated.
-                    throw new CommandException(string.Format(Strings.Source_InvalidFormatValue, args.Format));
+                    throw new CommandException(string.Format(CultureInfo.CurrentCulture, Strings.Source_InvalidFormatValue, args.Format));
+            }
+        }
+
+        private static void WarnForHttpSources(IEnumerable<PackageSource> sources, Func<ILogger> getLogger)
+        {
+            List<PackageSource> httpPackageSources = null;
+            foreach (PackageSource packageSource in sources)
+            {
+                if (packageSource.IsHttp && !packageSource.IsHttps)
+                {
+                    if (httpPackageSources == null)
+                    {
+                        httpPackageSources = new();
+                    }
+                    httpPackageSources.Add(packageSource);
+                }
+            }
+
+            if (httpPackageSources != null && httpPackageSources.Count != 0)
+            {
+                if (httpPackageSources.Count == 1)
+                {
+                    getLogger().LogWarning(
+                    string.Format(CultureInfo.CurrentCulture,
+                        Strings.Warning_HttpServerUsage,
+                        "list source",
+                        httpPackageSources[0]));
+                }
+                else
+                {
+                    getLogger().LogWarning(
+                            string.Format(CultureInfo.CurrentCulture,
+                            Strings.Warning_HttpServerUsage_MultipleSources,
+                            "list source",
+                            Environment.NewLine + string.Join(Environment.NewLine, httpPackageSources.Select(e => e.Name))));
+                }
             }
         }
     }
@@ -226,6 +277,12 @@ namespace NuGet.Commands
                 }
 
                 existingSource = new Configuration.PackageSource(args.Source, existingSource.Name);
+
+                // If the existing source is not http, warn the user
+                if (existingSource.IsHttp && !existingSource.IsHttps)
+                {
+                    getLogger().LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "update source", args.Source));
+                }
             }
 
             RunnerHelper.ValidateCredentials(args.Username, args.Password, args.ValidAuthenticationTypes);
@@ -311,6 +368,10 @@ namespace NuGet.Commands
             {
                 getLogger().LogMinimal(string.Format(CultureInfo.CurrentCulture,
                     Strings.SourcesCommandSourceEnabledSuccessfully, name));
+                if (packageSource.IsHttp && !packageSource.IsHttps)
+                {
+                    getLogger().LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "enable source", packageSource.Source));
+                }
             }
             else
             {

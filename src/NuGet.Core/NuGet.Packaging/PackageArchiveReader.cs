@@ -203,7 +203,12 @@ namespace NuGet.Packaging
 
             using (var destination = File.OpenWrite(nupkgFilePath))
             {
-                await ZipReadStream.CopyToAsync(destination);
+#if NETCOREAPP2_0_OR_GREATER
+                await ZipReadStream.CopyToAsync(destination, cancellationToken);
+#else
+                const int BufferSize = 8192;
+                await ZipReadStream.CopyToAsync(destination, BufferSize, cancellationToken);
+#endif
             }
 
             return nupkgFilePath;
@@ -432,7 +437,7 @@ namespace NuGet.Packaging
 
             return Task.FromResult(_isSigned.Value);
 #else
-            return Task.FromResult(false);
+            return TaskResult.False;
 #endif
         }
 
@@ -522,21 +527,24 @@ namespace NuGet.Packaging
             else if (RuntimeEnvironmentHelper.IsLinux || RuntimeEnvironmentHelper.IsMacOSX)
             {
                 // Please note: Linux/MAC case sensitive for env var name.
-                string signVerifyEnvVariable = _environmentVariableReader.GetEnvironmentVariable("DOTNET_NUGET_SIGNATURE_VERIFICATION");
+                string signVerifyEnvVariable = _environmentVariableReader.GetEnvironmentVariable(
+                    EnvironmentVariableConstants.DotNetNuGetSignatureVerification);
 
-                // Not opt-out option, only opt-in feature.
+                bool canVerify = false;
+
                 if (!string.IsNullOrEmpty(signVerifyEnvVariable))
                 {
-                    if (signVerifyEnvVariable.Equals(bool.TrueString.ToUpperInvariant(), StringComparison.Ordinal))
+                    if (string.Equals(bool.TrueString, signVerifyEnvVariable, StringComparison.OrdinalIgnoreCase))
                     {
-                        return true;
+                        canVerify = true;
                     }
-
-                    // other values are unsupported
-                    return false;
+                    else if (string.Equals(bool.FalseString, signVerifyEnvVariable, StringComparison.OrdinalIgnoreCase))
+                    {
+                        canVerify = false;
+                    }
                 }
 
-                return false;
+                return canVerify;
             }
             else
             {

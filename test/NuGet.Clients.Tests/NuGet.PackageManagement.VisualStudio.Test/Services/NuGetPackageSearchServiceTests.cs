@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Caching;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
@@ -24,10 +25,11 @@ using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
+using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using NuGet.VisualStudio.Internal.Contracts;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
 using Task = System.Threading.Tasks.Task;
 
@@ -41,6 +43,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         private readonly IEnumerable<ITransitivePackageReferenceContextInfo> _transitivePackages;
         private readonly IReadOnlyCollection<IProjectContextInfo> _projects;
         private readonly Mock<IComponentModel> _componentModel;
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
 
         public NuGetPackageSearchServiceTests(GlobalServiceProvider globalServiceProvider)
             : base(globalServiceProvider)
@@ -66,8 +70,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 { "https://api.nuget.org/v3/registration3-gz-semver2/microsoft.extensions.logging.abstractions/index.json", ProtocolUtility.GetResource("NuGet.PackageManagement.VisualStudio.Test.compiler.resources.loggingAbstractions.json", GetType()) }
             };
             _componentModel = new Mock<IComponentModel>();
-            var expService = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(_experimentationFlags));
-            _componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(expService);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
 
             globalServiceProvider.AddService(typeof(SComponentModel), _componentModel.Object);
 
@@ -223,6 +228,102 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     new PackageIdentity("microsoft.extensions.logging.abstractions", new Versioning.NuGetVersion("5.0.0-rc.2.20475.5")),
                     new List<PackageSourceContextInfo> { PackageSourceContextInfo.Create(_sourceRepository.PackageSource) },
                     includePrerelease: true,
+                    isTransitive: false,
+                    CancellationToken.None); ;
+
+                Assert.Equal(60, result.Count);
+                Assert.True(result.Last().Version.Version.Equals(new Version("1.0.0.0")));
+            }
+        }
+
+        [Fact]
+        public async Task GetPackageVersionsAsync_WithProjectAndPackageVersionsExist_ReturnsPackageVersionsAsync()
+        {
+            using (NuGetPackageSearchService searchService = SetupSearchService())
+            {
+                IReadOnlyCollection<VersionInfoContextInfo> result = await searchService.GetPackageVersionsAsync(
+                    new PackageIdentity("microsoft.extensions.logging.abstractions", new Versioning.NuGetVersion("5.0.0-rc.2.20475.5")),
+                    new List<PackageSourceContextInfo> { PackageSourceContextInfo.Create(_sourceRepository.PackageSource) },
+                    includePrerelease: true,
+                    isTransitive: false,
+                    _projects,
+                    CancellationToken.None); ;
+
+                Assert.Equal(60, result.Count);
+                Assert.True(result.Last().Version.Version.Equals(new Version("1.0.0.0")));
+            }
+        }
+
+        [Fact]
+        public async Task GetPackageVersionsAsync_WhenIsTransitiveAndCacheIsNotPopulatedAsync()
+        {
+            using (NuGetPackageSearchService searchService = SetupSearchService())
+            {
+                PackageIdentity transitivePackage = new PackageIdentity("microsoft.extensions.logging.abstractions", new Versioning.NuGetVersion("5.0.0-rc.2.20475.5"));
+                var packageSources = new List<PackageSourceContextInfo> { PackageSourceContextInfo.Create(_sourceRepository.PackageSource) };
+                var metadataProvider = Mock.Of<IPackageMetadataProvider>();
+
+                CacheItemPolicy _cacheItemPolicy = new CacheItemPolicy
+                {
+                    SlidingExpiration = ObjectCache.NoSlidingExpiration,
+                    AbsoluteExpiration = ObjectCache.InfiniteAbsoluteExpiration,
+                };
+
+                Mock.Get(metadataProvider)
+                    .Setup(m => m.GetPackageMetadataAsync(It.IsAny<PackageIdentity>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                    .Returns(() => Task.FromResult(PackageSearchMetadataBuilder.FromIdentity(new PackageIdentity("microsoft.extensions.logging.abstractions", NuGetVersion.Parse("5.0.0-rc.2.20475.5"))).Build()));
+
+                IPackageSearchMetadata packageMetadata = await metadataProvider.GetPackageMetadataAsync(transitivePackage, true, CancellationToken.None);
+
+                string cacheId = PackageSearchMetadataCacheItem.GetCacheId(transitivePackage.Id, true, packageSources);
+                var cacheEntry = new PackageSearchMetadataCacheItem(packageMetadata, metadataProvider);
+
+                NuGetPackageSearchService.PackageSearchMetadataMemoryCache.AddOrGetExisting(cacheId, cacheEntry, _cacheItemPolicy);
+
+                IReadOnlyCollection<VersionInfoContextInfo> result = await searchService.GetPackageVersionsAsync(
+                    transitivePackage,
+                    packageSources,
+                    includePrerelease: true,
+                    isTransitive: true,
+                    CancellationToken.None);
+
+                Assert.Equal(60, result.Count);
+                Assert.True(result.Last().Version.Version.Equals(new Version("1.0.0.0")));
+            }
+        }
+
+        [Fact]
+        public async Task GetPackageVersionsAsync_WithProjectAndIsTransitiveAndCacheIsNotPopulatedAsync()
+        {
+            using (NuGetPackageSearchService searchService = SetupSearchService())
+            {
+                PackageIdentity transitivePackage = new PackageIdentity("microsoft.extensions.logging.abstractions", new Versioning.NuGetVersion("5.0.0-rc.2.20475.5"));
+                var packageSources = new List<PackageSourceContextInfo> { PackageSourceContextInfo.Create(_sourceRepository.PackageSource) };
+                var metadataProvider = Mock.Of<IPackageMetadataProvider>();
+
+                CacheItemPolicy _cacheItemPolicy = new CacheItemPolicy
+                {
+                    SlidingExpiration = ObjectCache.NoSlidingExpiration,
+                    AbsoluteExpiration = ObjectCache.InfiniteAbsoluteExpiration,
+                };
+
+                Mock.Get(metadataProvider)
+                    .Setup(m => m.GetPackageMetadataAsync(It.IsAny<PackageIdentity>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                    .Returns(() => Task.FromResult(PackageSearchMetadataBuilder.FromIdentity(new PackageIdentity("microsoft.extensions.logging.abstractions", NuGetVersion.Parse("5.0.0-rc.2.20475.5"))).Build()));
+
+                IPackageSearchMetadata packageMetadata = await metadataProvider.GetPackageMetadataAsync(transitivePackage, true, CancellationToken.None);
+
+                string cacheId = PackageSearchMetadataCacheItem.GetCacheId(transitivePackage.Id, true, packageSources);
+                var cacheEntry = new PackageSearchMetadataCacheItem(packageMetadata, metadataProvider);
+
+                NuGetPackageSearchService.PackageSearchMetadataMemoryCache.AddOrGetExisting(cacheId, cacheEntry, _cacheItemPolicy);
+
+                IReadOnlyCollection<VersionInfoContextInfo> result = await searchService.GetPackageVersionsAsync(
+                    transitivePackage,
+                    packageSources,
+                    includePrerelease: true,
+                    isTransitive: true,
+                    _projects,
                     CancellationToken.None);
 
                 Assert.Equal(60, result.Count);
@@ -293,32 +394,20 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Theory]
-        [InlineData(false, ItemFilter.All, true, typeof(MultiSourcePackageFeed))]
-        [InlineData(false, ItemFilter.All, false, typeof(MultiSourcePackageFeed))]
-        [InlineData(false, ItemFilter.Installed, true, typeof(InstalledPackageFeed))]
-        [InlineData(false, ItemFilter.Installed, false, typeof(InstalledPackageFeed))]
-        [InlineData(false, ItemFilter.UpdatesAvailable, true, typeof(UpdatePackageFeed))]
-        [InlineData(false, ItemFilter.UpdatesAvailable, false, typeof(UpdatePackageFeed))]
-        [InlineData(false, ItemFilter.Consolidate, true, typeof(ConsolidatePackageFeed))]
-        [InlineData(false, ItemFilter.Consolidate, false, typeof(ConsolidatePackageFeed))]
-        [InlineData(true, ItemFilter.All, true, typeof(MultiSourcePackageFeed))]
-        [InlineData(true, ItemFilter.All, false, typeof(MultiSourcePackageFeed))]
-        [InlineData(true, ItemFilter.Installed, true, typeof(InstalledPackageFeed))]
-        [InlineData(true, ItemFilter.Installed, false, typeof(InstalledAndTransitivePackageFeed))] // Only when transitive experiment is enabled, show Transitive Dependencies in Installed Tab
-        [InlineData(true, ItemFilter.UpdatesAvailable, true, typeof(UpdatePackageFeed))]
-        [InlineData(true, ItemFilter.UpdatesAvailable, false, typeof(UpdatePackageFeed))]
-        [InlineData(true, ItemFilter.Consolidate, true, typeof(ConsolidatePackageFeed))]
-        [InlineData(true, ItemFilter.Consolidate, false, typeof(ConsolidatePackageFeed))]
-        public async Task CreatePackageFeedAsync_WithTransitiveOriginsExpFlag_OnlyInstalledFeedOnSolutionViewAsync(bool transitiveDependenciesExperimentEnabled, ItemFilter itemFilter, bool isSolution, Type expectedFeedType)
+        [InlineData(ItemFilter.All, true, typeof(MultiSourcePackageFeed))]
+        [InlineData(ItemFilter.All, false, typeof(MultiSourcePackageFeed))]
+        [InlineData(ItemFilter.Installed, true, typeof(InstalledPackageFeed))]
+        [InlineData(ItemFilter.Installed, false, typeof(InstalledAndTransitivePackageFeed))]
+        [InlineData(ItemFilter.UpdatesAvailable, true, typeof(UpdatePackageFeed))]
+        [InlineData(ItemFilter.UpdatesAvailable, false, typeof(UpdatePackageFeed))]
+        [InlineData(ItemFilter.Consolidate, true, typeof(ConsolidatePackageFeed))]
+        [InlineData(ItemFilter.Consolidate, false, typeof(ConsolidatePackageFeed))]
+        public async Task CreatePackageFeedAsync_WithTransitiveOrigins_OnlyInstalledFeedOnSolutionViewAsync(ItemFilter itemFilter, bool isSolution, Type expectedFeedType)
         {
-            _experimentationFlags[ExperimentationConstants.TransitiveDependenciesInPMUI.FlightFlag] = transitiveDependenciesExperimentEnabled;
-            // Recreate async lazy on each test
-            ExperimentUtility.ResetAsyncValues();
-
+            // Arrange
             using NuGetPackageSearchService searchService = SetupSearchService();
-            bool expValue = await ExperimentUtility.IsTransitiveOriginExpEnabled.GetValueAsync();
-            Assert.Equal(expValue, transitiveDependenciesExperimentEnabled);
 
+            // Act
             (IPackageFeed main, IPackageFeed recommender) = await searchService.CreatePackageFeedAsync(
                 projectContextInfos: _projects,
                 targetFrameworks: new List<string>() { "net45" },
@@ -328,6 +417,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 sourceRepositories: new List<SourceRepository>() { _sourceRepository },
                 cancellationToken: CancellationToken.None);
 
+            // Assert
             Assert.IsType(expectedFeedType, main);
             Assert.Null(recommender);
         }
@@ -366,8 +456,17 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             var projectManagerService = new Mock<INuGetProjectManagerService>();
 
+            projectManagerService.Setup(x => x.GetInstalledPackagesAsync(
+                    It.IsAny<IReadOnlyCollection<string>>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<IReadOnlyCollection<IPackageReferenceContextInfo>>(_installedPackages.ToList()));
             projectManagerService.Setup(x => x.GetInstalledAndTransitivePackagesAsync(
                     It.IsAny<IReadOnlyCollection<string>>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(new ValueTask<IInstalledAndTransitivePackages>(new InstalledAndTransitivePackages(_installedPackages.ToList(), _transitivePackages.ToList())));
+            projectManagerService.Setup(x => x.GetInstalledAndTransitivePackagesAsync(
+                    It.IsAny<IReadOnlyCollection<string>>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .Returns(new ValueTask<IInstalledAndTransitivePackages>(new InstalledAndTransitivePackages(_installedPackages.ToList(), _transitivePackages.ToList())));
             projectManagerService.Setup(x => x.GetPackageFoldersAsync(

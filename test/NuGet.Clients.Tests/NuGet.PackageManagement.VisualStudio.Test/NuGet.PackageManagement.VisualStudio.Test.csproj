@@ -1,7 +1,4 @@
-<Project>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'NuGet.sln'))\build\common.test.props" />
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>$(NETFXTargetFramework)</TargetFramework>
     <NETCoreWPFProject>true</NETCoreWPFProject>
@@ -22,46 +19,7 @@
     <Reference Include="WindowsBase" />
     <Reference Include="System.IO.Compression" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Common\IProjectContextInfoExtensionsTests.cs" />
-    <Compile Include="Feeds\InstalledAndTransitivePackageFeedTests.cs" />
-    <Compile Include="Feeds\SourceRepositoryCreator.cs" />
-    <Compile Include="Feeds\SourceRepositoryExtensionsTests.cs" />
-    <Compile Include="CpsPackageReferenceProjectTests.cs" />
-    <Compile Include="Projects\FrameworkInstalledPackagesTests.cs" />
-    <Compile Include="MockedVS.cs" />
-    <Compile Include="ProjectFactories.cs" />
-    <Compile Include="ProjectSystems\LegacyPackageReferenceProjectTests.cs" />
-    <Compile Include="Feeds\MultiSourcePackageMetadataProviderTests.cs" />
-    <Compile Include="Feeds\UpdatePackageFeedTests.cs" />
-    <Compile Include="Feeds\InstalledPackageFeedTests.cs" />
-    <Compile Include="FrameworkAssemblyResolverTests.cs" />
-    <Compile Include="ProjectSystems\LegacyPackageReferenceRestoreUtilityTests.cs" />
-    <Compile Include="ProjectSystems\ProjectSystemCacheTests.cs" />
-    <Compile Include="ProjectSystems\TestVSProjectAdapter.cs" />
-    <Compile Include="Projects\CpsPackageReferenceProjectProviderTests.cs" />
-    <Compile Include="Projects\PackageReferenceProjectTests.cs" />
-    <Compile Include="Services\MockedVSCollectionTests.cs" />
-    <Compile Include="Services\NuGetLockServiceTests.cs" />
-    <Compile Include="Services\NuGetProjectManagerServiceTests.cs" />
-    <Compile Include="Services\NuGetPackageFileServiceTests.cs" />
-    <Compile Include="Services\NuGetSourcesServiceTests.cs" />
-    <Compile Include="Services\SharedServiceStateTests.cs" />
-    <Compile Include="Services\TestSharedServiceState.cs" />
-    <Compile Include="Services\NuGetPackageSearchServiceTests.cs" />
-    <Compile Include="Telemetry\ActionsTelemetryServiceTests.cs" />
-    <Compile Include="Telemetry\HyperlinkClickedTelemetryEventTests.cs" />
-    <Compile Include="Telemetry\IntervalTrackerTests.cs" />
-    <Compile Include="Telemetry\NuGetTelemetryServiceTests.cs" />
-    <Compile Include="Telemetry\RestoreTelemetryServiceTests.cs" />
-    <Compile Include="Telemetry\SearchSelectionTelemetryEventTests.cs" />
-    <Compile Include="Telemetry\TestTelemetryUtility.cs" />
-    <Compile Include="VisualStudioCredentialProviderTests.cs" />
-    <Compile Include="VsCredentialProviderAdapterTests.cs" />
-    <Compile Include="VsCredentialProviderImporterTests.cs" />
-    <Compile Include="VSRestoreSettingsUtilityTests.cs" />
-    <Compile Include="Telemetry\VsTelemetrySessionTest.cs" />
-  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="compiler\resources\EntityFrameworkSearch.json" />
     <EmbeddedResource Include="compiler\resources\loggingAbstractions.json" />
@@ -73,16 +31,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(NuGetClientsSrcDirectory)NuGet.VisualStudio\NuGet.VisualStudio.csproj" />
-    <ProjectReference Include="$(NuGetClientsSrcDirectory)NuGet.PackageManagement.VisualStudio\NuGet.PackageManagement.VisualStudio.csproj" />
-    <ProjectReference Include="$(TestUtilitiesDirectory)Test.Utility\Test.Utility.csproj" />
-    <ProjectReference Include="$(NuGetClientsSrcDirectory)NuGet.VisualStudio.Common\NuGet.VisualStudio.Common.csproj" />
-    <ProjectReference Include="$(NuGetClientsSrcDirectory)NuGet.PackageManagement.UI\NuGet.PackageManagement.UI.csproj" />
-    <ProjectReference Include="..\NuGet.VisualStudio.Common.Test\NuGet.VisualStudio.Common.Test.csproj" />
+    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio\NuGet.VisualStudio.csproj" />
+    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.PackageManagement.VisualStudio\NuGet.PackageManagement.VisualStudio.csproj" />
+    <ProjectReference Include="..\..\TestUtilities\Test.Utility\Test.Utility.csproj" />
+    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio.Common\NuGet.VisualStudio.Common.csproj" />
+    <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.PackageManagement.UI\NuGet.PackageManagement.UI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.Sdk.TestFramework" />
+    <PackageReference Include="Microsoft.VisualStudio.Sdk.TestFramework.Xunit" />
     <PackageReference Include="VsWebSite.Interop" />
   </ItemGroup>
 
@@ -94,7 +51,4 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <Import Project="$(BuildCommonDirectory)common.targets" />
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

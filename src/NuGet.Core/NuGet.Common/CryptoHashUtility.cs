@@ -49,7 +49,7 @@ namespace NuGet.Common
                 throw new ArgumentNullException(nameof(data));
             }
 
-            string hash = null;
+            string hash;
 
             try
             {
@@ -108,7 +108,7 @@ namespace NuGet.Common
                 throw new ArgumentNullException(nameof(data));
             }
 
-            byte[] hash = null;
+            byte[] hash;
 
             try
             {
@@ -232,7 +232,6 @@ namespace NuGet.Common
         }
 #endif
 
-#if !NET45
         /// <summary>
         /// Extension method to convert NuGet.Common.HashAlgorithmName to System.Security.Cryptography.HashAlgorithmName
         /// </summary>
@@ -253,7 +252,6 @@ namespace NuGet.Common
                         nameof(hashAlgorithmName));
             }
         }
-#endif
 
         /// <summary>
         /// Extension method to convert NuGet.Common.HashAlgorithmName to an Oid string

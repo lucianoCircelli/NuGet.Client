@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -82,7 +81,7 @@ namespace NuGet.VisualStudio
 
             if (!extensionManagerShim.TryGetExtensionInstallPath(extensionId, out installPath))
             {
-                throwingErrorHandler(string.Format(VsResources.PreinstalledPackages_InvalidExtensionId,
+                throwingErrorHandler(string.Format(CultureInfo.CurrentCulture, VsResources.PreinstalledPackages_InvalidExtensionId,
                     extensionId));
                 Debug.Fail("The throwingErrorHandler did not throw");
             }
@@ -134,13 +133,13 @@ namespace NuGet.VisualStudio
 
             if (repositoryKey == null)
             {
-                throwingErrorHandler(string.Format(VsResources.PreinstalledPackages_RegistryKeyError, RegistryKeyRoot));
+                throwingErrorHandler(string.Format(CultureInfo.CurrentCulture, VsResources.PreinstalledPackages_RegistryKeyError, RegistryKeyRoot));
                 Debug.Fail("throwingErrorHandler did not throw");
             }
 
             if (string.IsNullOrEmpty(repositoryValue))
             {
-                throwingErrorHandler(string.Format(VsResources.PreinstalledPackages_InvalidRegistryValue, keyName, RegistryKeyRoot));
+                throwingErrorHandler(string.Format(CultureInfo.CurrentCulture, VsResources.PreinstalledPackages_InvalidRegistryValue, keyName, RegistryKeyRoot));
                 Debug.Fail("throwingErrorHandler did not throw");
             }
 
@@ -231,7 +230,7 @@ namespace NuGet.VisualStudio
 #pragma warning restore CS0618 // Type or member is obsolete
                         {
                             // No? Raise a warning (likely written to the Output window) and ignore this package.
-                            warningHandler(string.Format(VsResources.PreinstalledPackages_VersionConflict, package.Id, package.Version));
+                            warningHandler(string.Format(CultureInfo.CurrentCulture, VsResources.PreinstalledPackages_VersionConflict, package.Id, package.Version));
                         }
                         // Yes? Just silently ignore this package!
                     }
@@ -289,7 +288,7 @@ namespace NuGet.VisualStudio
                 if (failedPackageErrors.Any())
                 {
                     var errorString = new StringBuilder();
-                    errorString.AppendFormat(VsResources.PreinstalledPackages_FailedToInstallPackage, repositoryPath);
+                    errorString.AppendFormat(CultureInfo.CurrentCulture, VsResources.PreinstalledPackages_FailedToInstallPackage, repositoryPath);
                     errorString.AppendLine();
                     errorString.AppendLine();
                     errorString.Append(string.Join(Environment.NewLine, failedPackageErrors));
@@ -373,7 +372,7 @@ namespace NuGet.VisualStudio
 
                 var groups = reader.GetReferenceItems();
 
-                var fwComparer = new NuGetFrameworkFullComparer();
+                var fwComparer = NuGetFrameworkFullComparer.Instance;
                 FrameworkReducer reducer = new FrameworkReducer();
                 NuGetFramework targetGroupFramework = reducer.GetNearest(projectSystem.TargetFramework, groups.Select(e => e.TargetFramework));
 
@@ -421,7 +420,7 @@ namespace NuGet.VisualStudio
             }
         }
 
-        private void CopyNativeBinaries(VsMSBuildProjectSystem projectSystem, string packagePath)
+        private static void CopyNativeBinaries(VsMSBuildProjectSystem projectSystem, string packagePath)
         {
             const string nativeBinariesFolder = "NativeBinaries";
             const string binFolder = "bin";

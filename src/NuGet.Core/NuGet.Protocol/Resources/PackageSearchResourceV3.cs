@@ -118,9 +118,9 @@ namespace NuGet.Protocol
                 var queryUrl = new UriBuilder(endpoint.AbsoluteUri);
                 var queryString =
                     "q=" + searchTerm +
-                    "&skip=" + skip.ToString() +
-                    "&take=" + take.ToString() +
-                    "&prerelease=" + filters.IncludePrerelease.ToString().ToLowerInvariant();
+                    "&skip=" + skip.ToString(CultureInfo.CurrentCulture) +
+                    "&take=" + take.ToString(CultureInfo.CurrentCulture) +
+                    "&prerelease=" + filters.IncludePrerelease.ToString(CultureInfo.CurrentCulture).ToLowerInvariant();
 
                 if (filters.IncludeDelisted)
                 {
@@ -133,7 +133,7 @@ namespace NuGet.Protocol
                     var frameworks =
                         string.Join("&",
                             filters.SupportedFrameworks.Select(
-                                fx => "supportedFramework=" + fx.ToString()));
+                                fx => "supportedFramework=" + fx.ToString(CultureInfo.InvariantCulture)));
                     queryString += "&" + frameworks;
                 }
 
@@ -256,7 +256,11 @@ namespace NuGet.Protocol
             var _newtonsoftConvertersSerializer = JsonSerializer.Create(JsonExtensions.ObjectSerializationSettings);
             _newtonsoftConvertersSerializer.Converters.Add(new Converters.V3SearchResultsConverter(take));
 
+#if NETCOREAPP2_0_OR_GREATER
+            using (var stream = await httpInitialResponse.Content.ReadAsStreamAsync(token))
+#else
             using (var stream = await httpInitialResponse.Content.ReadAsStreamAsync())
+#endif
             using (var streamReader = new StreamReader(stream))
             using (var jsonReader = new JsonTextReader(streamReader))
             {

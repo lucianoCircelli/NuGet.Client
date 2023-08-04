@@ -244,10 +244,10 @@ namespace NuGet.CommandLine.Test
                 r.Success.Should().BeTrue();
                 projects.Should().NotBeEmpty();
 
-                foreach (var number in projects.Keys)
+                foreach ((var number, var context) in projects)
                 {
-                    projects[number].AssetsFile.Libraries.Select(e => e.Name).Should().Contain(packageId);
-                    projects[number].AssetsFile.Libraries.Single(e => e.Name.Equals(packageId)).Version.ToString().Should().Be(packageVersion);
+                    context.AssetsFile.Libraries.Select(e => e.Name).Should().Contain(packageId);
+                    context.AssetsFile.Libraries.Single(e => e.Name.Equals(packageId)).Version.ToString().Should().Be(packageVersion);
                 }
             }
         }
@@ -467,15 +467,15 @@ namespace NuGet.CommandLine.Test
                 var r1 = Util.RestoreSolution(pathContext);
 
                 //Assert.
-                Assert.Equal(0, r1.Item1);
-                Assert.Contains("Writing cache file", r1.Item2);
+                Assert.Equal(0, r1.ExitCode);
+                Assert.Contains("Writing cache file", r1.Output);
 
                 // Act
                 var r2 = Util.RestoreSolution(pathContext);
 
                 //Assert.
-                Assert.Equal(0, r2.Item1);
-                Assert.DoesNotContain("Writing cache file", r2.Item2);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.DoesNotContain("Writing cache file", r2.Output);
 
                 // create a config file
                 var projectDir = Path.GetDirectoryName(projectA.ProjectPath);
@@ -510,8 +510,8 @@ namespace NuGet.CommandLine.Test
 
 
                 //Assert.
-                Assert.Equal(0, r3.Item1);
-                Assert.Contains("Writing cache file", r3.Item2);
+                Assert.Equal(0, r3.ExitCode);
+                Assert.Contains("Writing cache file", r3.Output);
             }
         }
 
@@ -548,15 +548,15 @@ namespace NuGet.CommandLine.Test
                 var r1 = Util.RestoreSolution(pathContext);
 
                 //Assert.
-                Assert.Equal(0, r1.Item1);
-                Assert.Contains("Writing cache file", r1.Item2);
+                Assert.Equal(0, r1.ExitCode);
+                Assert.Contains("Writing cache file", r1.Output);
 
                 // Act
                 var r2 = Util.RestoreSolution(pathContext);
 
                 //Assert.
-                Assert.Equal(0, r2.Item1);
-                Assert.DoesNotContain("Writing cache file", r2.Item2);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.DoesNotContain("Writing cache file", r2.Output);
 
                 // create a config file
                 var projectDir = Path.GetDirectoryName(projectA.ProjectPath);
@@ -592,8 +592,8 @@ namespace NuGet.CommandLine.Test
 
 
                 //Assert.
-                Assert.Equal(0, r3.Item1);
-                Assert.Contains("Writing cache file", r3.Item2);
+                Assert.Equal(0, r3.ExitCode);
+                Assert.Contains("Writing cache file", r3.Output);
             }
         }
 
@@ -630,15 +630,15 @@ namespace NuGet.CommandLine.Test
                 var r1 = Util.RestoreSolution(pathContext);
 
                 //Assert.
-                Assert.Equal(0, r1.Item1);
-                Assert.Contains("Writing cache file", r1.Item2);
+                Assert.Equal(0, r1.ExitCode);
+                Assert.Contains("Writing cache file", r1.Output);
 
                 // Act
                 var r2 = Util.RestoreSolution(pathContext);
 
                 //Assert.
-                Assert.Equal(0, r2.Item1);
-                Assert.DoesNotContain("Writing cache file", r2.Item2);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.DoesNotContain("Writing cache file", r2.Output);
 
                 // create a config file
                 var projectDir = Path.GetDirectoryName(projectA.ProjectPath);
@@ -671,8 +671,8 @@ namespace NuGet.CommandLine.Test
 
 
                 //Assert.
-                Assert.Equal(0, r3.Item1);
-                Assert.Contains("Writing cache file", r3.Item2);
+                Assert.Equal(0, r3.ExitCode);
+                Assert.Contains("Writing cache file", r3.Output);
             }
         }
 
@@ -891,11 +891,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath));
@@ -954,11 +953,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert correct projects were restored.
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath));
@@ -1008,9 +1006,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
 
                 var assetsFile = projectA.AssetsFile;
                 Assert.Equal(2, assetsFile.Targets.Count);
@@ -1058,10 +1056,10 @@ namespace NuGet.CommandLine.Test
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
-                var output = r.Item2 + " " + r.Item3;
+                var output = r.Output + " " + r.Errors;
 
                 // Assert
-                Assert.True(r.Item1 == 1);
+                Assert.True(r.ExitCode == 1);
                 Assert.Contains("no run-time assembly compatible", output);
             }
         }
@@ -1105,8 +1103,8 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(r.Item1 == 0);
-                Assert.DoesNotContain("no run-time assembly compatible", r.Item3);
+                Assert.True(r.ExitCode == 0);
+                Assert.DoesNotContain("no run-time assembly compatible", r.Errors);
             }
         }
 
@@ -1157,10 +1155,10 @@ namespace NuGet.CommandLine.Test
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
-                var output = r.Item2 + " " + r.Item3;
+                var output = r.Output + " " + r.Errors;
 
                 // Assert
-                Assert.True(r.Item1 == 1);
+                Assert.True(r.ExitCode == 1);
                 Assert.Contains("no run-time assembly compatible", output);
             }
         }
@@ -1201,9 +1199,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
 
                 var assetsFile = projectA.AssetsFile;
                 Assert.Equal(2, assetsFile.Targets.Count);
@@ -1250,9 +1248,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
 
                 var assetsFile = projectA.AssetsFile;
                 Assert.Equal(2, assetsFile.Targets.Count);
@@ -1297,7 +1295,7 @@ namespace NuGet.CommandLine.Test
 
                 // Act
                 var r = Util.RestoreSolution(pathContext);
-                var output = r.Item2 + r.Item3;
+                var output = r.Output + r.Errors;
 
                 // Assert
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath), output);
@@ -1341,9 +1339,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
 
                 var assetsFile = projectA.AssetsFile;
                 Assert.Equal(3, assetsFile.Targets.Count);
@@ -1420,7 +1418,7 @@ namespace NuGet.CommandLine.Test
 
                 // Assert
                 // Version should not be used
-                Assert.False(File.Exists(path), r.Item2);
+                Assert.False(File.Exists(path), r.Output);
 
                 // Each project should have its own tool verion
                 Assert.Equal(testCount, Directory.GetDirectories(zPath).Length);
@@ -1496,8 +1494,8 @@ namespace NuGet.CommandLine.Test
 
                 // Assert
                 // Version should not be used
-                Assert.False(File.Exists(path), r.Item2);
-                Assert.False(File.Exists(cacheFile), r.Item2);
+                Assert.False(File.Exists(path), r.Output);
+                Assert.False(File.Exists(cacheFile), r.Output);
 
                 // Each project should have its own tool verion
                 Assert.Equal(testCount, Directory.GetDirectories(zPath).Length);
@@ -1507,12 +1505,12 @@ namespace NuGet.CommandLine.Test
 
                 // Assert
                 // Version should not be used
-                Assert.False(File.Exists(path), r2.Item2);
-                Assert.False(File.Exists(cacheFile), r2.Item2);
-                Assert.DoesNotContain("NU1603", r2.Item2);
+                Assert.False(File.Exists(path), r2.Output);
+                Assert.False(File.Exists(cacheFile), r2.Output);
+                Assert.DoesNotContain("NU1603", r2.Output);
                 for (var i = 1; i <= testCount; i++)
                 {
-                    Assert.Contains($"The restore inputs for 'z-netcoreapp1.0-[{i}.0.0, )' have not changed. No further actions are required to complete the restore.", r2.Item2);
+                    Assert.Contains($"The restore inputs for 'z-netcoreapp1.0-[{i}.0.0, )' have not changed. No further actions are required to complete the restore.", r2.Output);
                 }
                 // Each project should have its own tool verion
                 Assert.Equal(testCount, Directory.GetDirectories(zPath).Length);
@@ -1562,16 +1560,16 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.Equal(0, r.Item1);
-                Assert.Contains("Writing cache file", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.Contains("Writing cache file", r.Output);
 
                 //re-arrange again
                 project.AddPackageToAllFrameworks(packageZ);
                 project.Save();
 
                 //assert
-                Assert.Contains("Writing cache file", r.Item2);
-                Assert.Equal(0, r.Item1);
+                Assert.Contains("Writing cache file", r.Output);
+                Assert.Equal(0, r.ExitCode);
 
 
             }
@@ -1597,8 +1595,8 @@ namespace NuGet.CommandLine.Test
                 var project = SimpleTestProjectContext.CreateNETCoreWithSDK(
                     "proj",
                     pathContext.SolutionRoot,
-                    "net46",
-                    "net45");
+                    "net48",
+                    "net46");
 
                 project.AddPackageToAllFrameworks(packageX);
                 solution.Projects.Add(project);
@@ -1612,14 +1610,14 @@ namespace NuGet.CommandLine.Test
 
                 // Act
                 var r = Util.RestoreSolution(pathContext);
-                Assert.Equal(0, r.Item1);
-                Assert.True(File.Exists(project.PropsOutput), r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.True(File.Exists(project.PropsOutput), r.Output);
                 var propsXML = XDocument.Parse(File.ReadAllText(project.PropsOutput));
 
                 var propsItemGroups = propsXML.Root.Elements().Where(e => e.Name.LocalName == "ItemGroup").ToList();
 
-                Assert.Contains("'$(TargetFramework)' == 'net45' AND '$(ExcludeRestorePackageImports)' != 'true'", propsItemGroups[1].Attribute(XName.Get("Condition")).Value.Trim());
-                Assert.Contains("'$(TargetFramework)' == 'net46' AND '$(ExcludeRestorePackageImports)' != 'true'", propsItemGroups[2].Attribute(XName.Get("Condition")).Value.Trim());
+                Assert.Contains("'$(TargetFramework)' == 'net46' AND '$(ExcludeRestorePackageImports)' != 'true'", propsItemGroups[1].Attribute(XName.Get("Condition")).Value.Trim());
+                Assert.Contains("'$(TargetFramework)' == 'net48' AND '$(ExcludeRestorePackageImports)' != 'true'", propsItemGroups[2].Attribute(XName.Get("Condition")).Value.Trim());
             }
         }
 
@@ -1666,8 +1664,8 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.Equal(0, r.Item1);
-                Assert.Contains("Writing cache file", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.Contains("Writing cache file", r.Output);
 
                 // build project
                 var project2 = SimpleTestProjectContext.CreateNETCore(
@@ -1684,9 +1682,9 @@ namespace NuGet.CommandLine.Test
                 var r2 = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.Equal(0, r2.Item1);
-                Assert.Contains("Writing cache file", r2.Item2);
-                Assert.Contains("No further actions are required to complete", r2.Item2);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.Contains("Writing cache file", r2.Output);
+                Assert.Contains("No further actions are required to complete", r2.Output);
 
             }
         }
@@ -1730,8 +1728,8 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.Equal(0, r.Item1);
-                Assert.Contains("Writing cache file", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.Contains("Writing cache file", r.Output);
 
                 //Setup - remove the warnings and errors
                 project.WarningsAsErrors = false;
@@ -1741,8 +1739,8 @@ namespace NuGet.CommandLine.Test
                 var r2 = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.Equal(0, r2.Item1);
-                Assert.Contains("No further actions are required to complete", r2.Item2);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.Contains("No further actions are required to complete", r2.Output);
             }
         }
 
@@ -1800,7 +1798,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(path), r.Item2);
+                Assert.True(File.Exists(path), r.Output);
                 Assert.Equal(1, Directory.GetDirectories(zPath).Length);
             }
         }
@@ -1858,7 +1856,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(path), r.Item2);
+                Assert.True(File.Exists(path), r.Output);
             }
         }
 
@@ -1937,7 +1935,7 @@ namespace NuGet.CommandLine.Test
                 Assert.True(File.Exists(cachePath));
                 // This is expected, because despite the fact that both projects resolve to the same tool, the version range they request is different so they will keep overwriting each other
                 // Basically, it is impossible for both tools to no-op.
-                Assert.Contains($"Writing tool assets file to disk", r2.Item2);
+                Assert.Contains($"Writing tool assets file to disk", r2.Output);
                 r = Util.RestoreSolution(pathContext);
 
             }
@@ -2019,7 +2017,7 @@ namespace NuGet.CommandLine.Test
 
                 // This is expected, because despite the fact that both projects resolve to the same tool, the version range they request is different so they will keep overwriting each other
                 // Basically, it is impossible for both tools to no-op.
-                Assert.Contains($"Writing tool assets file to disk", r2.Item2);
+                Assert.Contains($"Writing tool assets file to disk", r2.Output);
             }
         }
 
@@ -2183,7 +2181,7 @@ namespace NuGet.CommandLine.Test
                 // Assert
                 Assert.True(File.Exists(assetsPath));
                 Assert.True(File.Exists(cachePath));
-                Assert.Contains($"The restore inputs for 'z-netcoreapp1.0-[1.0.0, )' have not changed. No further actions are required to complete the restore", r2.Item2);
+                Assert.Contains($"The restore inputs for 'z-netcoreapp1.0-[1.0.0, )' have not changed. No further actions are required to complete the restore", r2.Output);
 
                 r = Util.RestoreSolution(pathContext);
 
@@ -2248,7 +2246,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(path), r.Item2);
+                Assert.True(File.Exists(path), r.Output);
             }
         }
 
@@ -2318,7 +2316,7 @@ namespace NuGet.CommandLine.Test
                 // Assert
                 Assert.True(File.Exists(assetsPath));
                 Assert.True(File.Exists(cachePath));
-                Assert.Contains($"The restore inputs for 'z-netcoreapp1.0-[1.0.0, )' have not changed. No further actions are required to complete the restore.", r2.Item2);
+                Assert.Contains($"The restore inputs for 'z-netcoreapp1.0-[1.0.0, )' have not changed. No further actions are required to complete the restore.", r2.Output);
 
                 r = Util.RestoreSolution(pathContext);
             }
@@ -2441,9 +2439,9 @@ namespace NuGet.CommandLine.Test
                 // Assert
                 Assert.True(File.Exists(assetsPath));
                 Assert.True(File.Exists(cachePath));
-                Assert.Contains($"The restore inputs for 'x-netcoreapp1.0-[1.0.0, )' have not changed. No further actions are required to complete the restore.", r2.Item2);
-                Assert.Contains($"The restore inputs for 'a' have not changed. No further actions are required to complete the restore.", r2.Item2);
-                Assert.Contains($"The restore inputs for 'b' have not changed. No further actions are required to complete the restore.", r2.Item2);
+                Assert.Contains($"The restore inputs for 'x-netcoreapp1.0-[1.0.0, )' have not changed. No further actions are required to complete the restore.", r2.Output);
+                Assert.Contains($"The restore inputs for 'a' have not changed. No further actions are required to complete the restore.", r2.Output);
+                Assert.Contains($"The restore inputs for 'b' have not changed. No further actions are required to complete the restore.", r2.Output);
 
                 r = Util.RestoreSolution(pathContext);
             }
@@ -2493,7 +2491,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, additionalArgs: "-Recursive");
 
                 // Assert
-                Assert.True(File.Exists(path), r.Item2);
+                Assert.True(File.Exists(path), r.Output);
             }
         }
 
@@ -2541,7 +2539,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.False(File.Exists(path), r.Item2);
+                Assert.False(File.Exists(path), r.Output);
             }
         }
         [Fact]
@@ -2679,7 +2677,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
 
                 var targetsXML = XDocument.Parse(File.ReadAllText(projectA.TargetsOutput));
                 var targetItemGroups = targetsXML.Root.Elements().Where(e => e.Name.LocalName == "ImportGroup").ToList();
@@ -2755,7 +2753,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
 
                 var targetsXML = XDocument.Parse(File.ReadAllText(projectA.TargetsOutput));
                 var targetItemGroups = targetsXML.Root.Elements().Where(e => e.Name.LocalName == "ImportGroup").ToList();
@@ -2805,7 +2803,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
 
                 var targetsXML = XDocument.Parse(File.ReadAllText(projectA.TargetsOutput));
                 var targetItemGroups = targetsXML.Root.Elements().Where(e => e.Name.LocalName == "ImportGroup").ToList();
@@ -2865,7 +2863,7 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.False(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.False(File.Exists(projectA.TargetsOutput), r.Output);
             }
         }
 
@@ -3017,14 +3015,14 @@ namespace NuGet.CommandLine.Test
                 var msbuildPropsItems = TargetsUtility.GetMSBuildPackageImports(projectA.PropsOutput);
 
                 // Assert
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
                 Assert.Equal(1, msbuildTargetsItems.Count);
                 Assert.Equal(1, msbuildPropsItems.Count);
 
 
                 // Act
                 r = Util.RestoreSolution(pathContext);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
 
                 msbuildTargetsItems = TargetsUtility.GetMSBuildPackageImports(projectA.TargetsOutput);
                 msbuildPropsItems = TargetsUtility.GetMSBuildPackageImports(projectA.PropsOutput);
@@ -3032,7 +3030,7 @@ namespace NuGet.CommandLine.Test
                 Assert.Equal(1, msbuildTargetsItems.Count);
                 Assert.Equal(1, msbuildPropsItems.Count);
 
-                Assert.True(r.Item1 == 0);
+                Assert.True(r.ExitCode == 0);
             }
         }
 
@@ -3081,12 +3079,12 @@ namespace NuGet.CommandLine.Test
 
                 // Restore one
                 var r = Util.RestoreSolution(pathContext);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
 
                 // Act
                 r = Util.RestoreSolution(pathContext);
-                Assert.True(r.Item1 == 0);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
+                Assert.True(r.ExitCode == 0);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
             }
         }
 
@@ -3495,11 +3493,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 var targetB = projectA.AssetsFile.Targets.Single(e => e.TargetFramework.Equals(NuGetFramework.Parse("NETCoreApp1.0"))).Libraries.SingleOrDefault(e => e.Name == "b");
@@ -3586,11 +3583,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 var assetsFile = projectA.AssetsFile;
@@ -3598,7 +3594,7 @@ namespace NuGet.CommandLine.Test
                 // Find all non _._ compile assets
                 var flowingCompile = assetsFile.Targets.Single(target => string.IsNullOrEmpty(target.RuntimeIdentifier)).Libraries
                     .Where(e => e.Type == "project")
-                    .Where(e => e.CompileTimeAssemblies.Where(f => !f.Path.EndsWith("_._")).Any())
+                    .Where(e => e.CompileTimeAssemblies.Any(f => !f.Path.EndsWith("_._")))
                     .Select(e => e.Name)
                     .OrderBy(s => s, StringComparer.OrdinalIgnoreCase);
 
@@ -3607,7 +3603,7 @@ namespace NuGet.CommandLine.Test
                 // Runtime should always flow
                 var flowingRuntime = assetsFile.Targets.Single(target => string.IsNullOrEmpty(target.RuntimeIdentifier)).Libraries
                     .Where(e => e.Type == "project")
-                    .Where(e => e.RuntimeAssemblies.Where(f => !f.Path.EndsWith("_._")).Any())
+                    .Where(e => e.RuntimeAssemblies.Any(f => !f.Path.EndsWith("_._")))
                     .Select(e => e.Name)
                     .OrderBy(s => s, StringComparer.OrdinalIgnoreCase);
 
@@ -3690,11 +3686,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 var assetsFile = projectA.AssetsFile;
@@ -3702,7 +3697,7 @@ namespace NuGet.CommandLine.Test
                 // Find all non _._ compile assets
                 var flowingCompile = assetsFile.Targets.Single(e => string.IsNullOrEmpty(e.RuntimeIdentifier)).Libraries
                     .Where(e => e.Type == "project")
-                    .Where(e => e.CompileTimeAssemblies.Where(f => !f.Path.EndsWith("_._")).Any())
+                    .Where(e => e.CompileTimeAssemblies.Any(f => !f.Path.EndsWith("_._")))
                     .Select(e => e.Name)
                     .OrderBy(s => s, StringComparer.OrdinalIgnoreCase);
 
@@ -3711,7 +3706,7 @@ namespace NuGet.CommandLine.Test
                 // Runtime should always flow
                 var flowingRuntime = assetsFile.Targets.Single(e => string.IsNullOrEmpty(e.RuntimeIdentifier)).Libraries
                     .Where(e => e.Type == "project")
-                    .Where(e => e.RuntimeAssemblies.Where(f => !f.Path.EndsWith("_._")).Any())
+                    .Where(e => e.RuntimeAssemblies.Any(f => !f.Path.EndsWith("_._")))
                     .Select(e => e.Name)
                     .OrderBy(s => s, StringComparer.OrdinalIgnoreCase);
 
@@ -3759,11 +3754,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 var targetB = projectA.AssetsFile.Targets.Single(e => e.TargetFramework.Equals(NuGetFramework.Parse("NETCoreApp1.0")) && string.IsNullOrEmpty(e.RuntimeIdentifier)).Libraries.SingleOrDefault(e => e.Name == "b");
@@ -3846,11 +3840,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 var targetB = projectA.AssetsFile.Targets.Single(e => e.TargetFramework.Equals(NuGetFramework.Parse("NETCoreApp1.0")) && string.IsNullOrEmpty(e.RuntimeIdentifier)).Libraries.SingleOrDefault(e => e.Name == "b");
@@ -3938,11 +3931,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.False(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.False(0 == r.ExitCode, r.Output + " " + r.Errors);
             }
         }
 
@@ -3990,9 +3982,9 @@ namespace NuGet.CommandLine.Test
 
                 // Assert
                 // Verify all files were written
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
                 Assert.Equal(1, targets.Count);
             }
         }
@@ -4031,9 +4023,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
                 r.AllOutput.Should().NotContain("NU1503");
             }
         }
@@ -4165,9 +4157,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext);
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
 
                 Assert.Equal(NuGetFramework.Parse("net45"), projectA.AssetsFile.Targets.Single(e => string.IsNullOrEmpty(e.RuntimeIdentifier)).TargetFramework);
             }
@@ -5887,9 +5879,9 @@ namespace NuGet.CommandLine.Test
                 var r = Util.RestoreSolution(pathContext, 0, $"-ConfigFile {relativePathToConfig}");
 
                 // Assert
-                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Item2);
-                Assert.True(File.Exists(projectA.TargetsOutput), r.Item2);
-                Assert.True(File.Exists(projectA.PropsOutput), r.Item2);
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath), r.Output);
+                Assert.True(File.Exists(projectA.TargetsOutput), r.Output);
+                Assert.True(File.Exists(projectA.PropsOutput), r.Output);
 
                 Assert.Equal(NuGetFramework.Parse("net45"), projectA.AssetsFile.Targets.Single(e => string.IsNullOrEmpty(e.RuntimeIdentifier)).TargetFramework);
             }
@@ -5953,16 +5945,16 @@ namespace NuGet.CommandLine.Test
                 // Act && Assert
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
 
-                Assert.Equal(0, r.Item1);
-                Assert.Contains("Writing cache file", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.Contains("Writing cache file", r.Output);
 
                 // Do it again, it should no-op now.
                 // Act && Assert
                 var r2 = Util.RestoreSolution(pathContext, expectedExitCode: 0);
 
-                Assert.Equal(0, r2.Item1);
-                Assert.DoesNotContain("Writing cache file", r2.Item2);
-                Assert.Contains("The restore inputs for 'parent' have not changed. No further actions are required to complete the restore.", r2.Item2);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.DoesNotContain("Writing cache file", r2.Output);
+                Assert.Contains("The restore inputs for 'parent' have not changed. No further actions are required to complete the restore.", r2.Output);
             }
         }
 
@@ -6000,9 +5992,9 @@ namespace NuGet.CommandLine.Test
                 // Act && Assert
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
 
-                Assert.Equal(0, r.Item1);
-                Assert.Contains("Writing cache file", r.Item2);
-                Assert.Contains("Writing assets file to disk", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.Contains("Writing cache file", r.Output);
+                Assert.Contains("Writing assets file to disk", r.Output);
 
                 // Pre-condition, Assert deleting the correct file
                 Assert.True(File.Exists(project.CacheFileOutputPath));
@@ -6010,9 +6002,9 @@ namespace NuGet.CommandLine.Test
 
                 r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
 
-                Assert.Equal(0, r.Item1);
-                Assert.Contains("Writing cache file", r.Item2);
-                Assert.DoesNotContain("Writing assets file to disk", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.Contains("Writing cache file", r.Output);
+                Assert.DoesNotContain("Writing assets file to disk", r.Output);
 
 
             }
@@ -6094,22 +6086,22 @@ namespace NuGet.CommandLine.Test
 
                 // Prerequisites
                 var r1 = Util.Restore(pathContext, project.ProjectPath);
-                Assert.Equal(0, r1.Item1);
-                Assert.Contains("Writing cache file", r1.Item2);
-                Assert.Contains("Writing assets file to disk", r1.Item2);
+                Assert.Equal(0, r1.ExitCode);
+                Assert.Contains("Writing cache file", r1.Output);
+                Assert.Contains("Writing assets file to disk", r1.Output);
 
                 var r2 = Util.Restore(pathContext, secondaryProjectName);
-                Assert.Contains("Writing cache file", r2.Item2);
-                Assert.Equal(0, r2.Item1);
-                Assert.Contains("Writing assets file to disk", r2.Item2);
+                Assert.Contains("Writing cache file", r2.Output);
+                Assert.Equal(0, r2.ExitCode);
+                Assert.Contains("Writing assets file to disk", r2.Output);
 
                 // Act
                 var result = Util.Restore(pathContext, project.ProjectPath);
 
                 // Assert
-                Assert.Equal(0, result.Item1);
-                Assert.Contains("Writing cache file", result.Item2);
-                Assert.Contains("Writing assets file to disk", result.Item2);
+                Assert.Equal(0, result.ExitCode);
+                Assert.Contains("Writing cache file", result.Output);
+                Assert.Contains("Writing assets file to disk", result.Output);
             }
         }
 
@@ -6465,10 +6457,10 @@ namespace NuGet.CommandLine.Test
 
                 // Prerequisites
                 var result = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
-                Assert.Equal(0, result.Item1);
-                Assert.Contains("Writing cache file", result.Item2);
-                Assert.Contains("Writing assets file to disk", result.Item2);
-                Assert.Contains("Persisting dg", result.Item2);
+                Assert.Equal(0, result.ExitCode);
+                Assert.Contains("Writing cache file", result.Output);
+                Assert.Contains("Writing assets file to disk", result.Output);
+                Assert.Contains("Persisting dg", result.Output);
 
                 var dgSpecFileName = Path.Combine(Path.GetDirectoryName(project.AssetsFileOutputPath), $"{Path.GetFileName(project.ProjectPath)}.nuget.dgspec.json");
 
@@ -6480,10 +6472,10 @@ namespace NuGet.CommandLine.Test
                 result = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 // Assert
-                Assert.Equal(0, result.Item1);
-                Assert.DoesNotContain("Writing cache file", result.Item2);
-                Assert.DoesNotContain("Writing assets file to disk", result.Item2);
-                Assert.DoesNotContain("Persisting dg", result.Item2);
+                Assert.Equal(0, result.ExitCode);
+                Assert.DoesNotContain("Writing cache file", result.Output);
+                Assert.DoesNotContain("Writing assets file to disk", result.Output);
+                Assert.DoesNotContain("Persisting dg", result.Output);
 
                 fileInfo = new FileInfo(dgSpecFileName);
                 Assert.True(fileInfo.Exists);
@@ -6538,8 +6530,8 @@ namespace NuGet.CommandLine.Test
                 var result1 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 // Assert
-                Assert.Equal(0, result1.Item1);
-                Assert.Contains("Writing packages lock file at disk.", result1.Item2);
+                Assert.Equal(0, result1.ExitCode);
+                Assert.Contains("Writing packages lock file at disk.", result1.Output);
                 Assert.True(File.Exists(packageLockFileName));
 
                 // Act
@@ -6549,9 +6541,9 @@ namespace NuGet.CommandLine.Test
                 var result2 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 //Assert
-                Assert.Equal(0, result2.Item1);
-                Assert.Contains(noOpFailedMsg, result2.Item2);
-                Assert.Contains("Writing packages lock file at disk.", result2.Item2);
+                Assert.Equal(0, result2.ExitCode);
+                Assert.Contains(noOpFailedMsg, result2.Output);
+                Assert.Contains("Writing packages lock file at disk.", result2.Output);
                 Assert.True(File.Exists(packageLockFileName));
             }
         }
@@ -6605,17 +6597,17 @@ namespace NuGet.CommandLine.Test
                 var result1 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 // Assert
-                Assert.Equal(0, result1.Item1);
-                Assert.Contains("Writing packages lock file at disk.", result1.Item2);
+                Assert.Equal(0, result1.ExitCode);
+                Assert.Contains("Writing packages lock file at disk.", result1.Output);
                 Assert.True(File.Exists(packageLockFileName));
 
                 // Act
                 var result2 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 //Assert
-                Assert.Equal(0, result2.Item1);
-                Assert.Contains(noOpSucceedMsg, result2.Item2);
-                Assert.DoesNotContain("Writing packages lock file at disk.", result2.Item2);
+                Assert.Equal(0, result2.ExitCode);
+                Assert.Contains(noOpSucceedMsg, result2.Output);
+                Assert.DoesNotContain("Writing packages lock file at disk.", result2.Output);
                 Assert.True(File.Exists(packageLockFileName));
             }
         }
@@ -6669,8 +6661,8 @@ namespace NuGet.CommandLine.Test
                 var result1 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 // Assert
-                Assert.Equal(0, result1.Item1);
-                Assert.Contains("Writing packages lock file at disk.", result1.Item2);
+                Assert.Equal(0, result1.ExitCode);
+                Assert.Contains("Writing packages lock file at disk.", result1.Output);
                 Assert.True(File.Exists(packageLockFileName));
 
                 // Act
@@ -6680,9 +6672,9 @@ namespace NuGet.CommandLine.Test
                 var result2 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 //Assert
-                Assert.Equal(0, result2.Item1);
-                Assert.Contains(noOpSucceedMsg, result2.Item2);
-                Assert.DoesNotContain("Writing packages lock file at disk.", result2.Item2);
+                Assert.Equal(0, result2.ExitCode);
+                Assert.Contains(noOpSucceedMsg, result2.Output);
+                Assert.DoesNotContain("Writing packages lock file at disk.", result2.Output);
                 Assert.False(File.Exists(packageLockFileName));
             }
         }
@@ -6736,17 +6728,17 @@ namespace NuGet.CommandLine.Test
                 var result1 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 // Assert
-                Assert.Equal(0, result1.Item1);
-                Assert.Contains("Writing packages lock file at disk.", result1.Item2);
+                Assert.Equal(0, result1.ExitCode);
+                Assert.Contains("Writing packages lock file at disk.", result1.Output);
                 Assert.True(File.Exists(packageLockFileName));
 
                 // Act
                 var result2 = Util.Restore(pathContext, project.ProjectPath, additionalArgs: "-verbosity Detailed");
 
                 //Assert
-                Assert.Equal(0, result2.Item1);
-                Assert.Contains(noOpSucceedMsg, result2.Item2);
-                Assert.DoesNotContain("Writing packages lock file at disk.", result2.Item2);
+                Assert.Equal(0, result2.ExitCode);
+                Assert.Contains(noOpSucceedMsg, result2.Output);
+                Assert.DoesNotContain("Writing packages lock file at disk.", result2.Output);
                 Assert.True(File.Exists(packageLockFileName));
             }
         }
@@ -6935,7 +6927,7 @@ namespace NuGet.CommandLine.Test
             {
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-                var projectFrameworks = "net45;net46";
+                var projectFrameworks = "net46;net48";
 
                 var projectA = SimpleTestProjectContext.CreateNETCoreWithSDK(
                             projectName: "a",
@@ -6959,9 +6951,9 @@ namespace NuGet.CommandLine.Test
                     packageX1,
                     packageX2);
 
-                projectA.AddPackageToFramework("net45", packageX1);
+                projectA.AddPackageToFramework("net46", packageX1);
 
-                projectA.AddPackageDownloadToFramework("net46", packageX2);
+                projectA.AddPackageDownloadToFramework("net48", packageX2);
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -7000,7 +6992,7 @@ namespace NuGet.CommandLine.Test
             {
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-                var projectFrameworks = "net45;net46";
+                var projectFrameworks = "net472;net48";
 
                 var projectA = SimpleTestProjectContext.CreateNETCoreWithSDK(
                             projectName: "a",
@@ -7024,9 +7016,9 @@ namespace NuGet.CommandLine.Test
                     packageX1,
                     packageX2);
 
-                projectA.AddPackageDownloadToFramework("net45", packageX1);
+                projectA.AddPackageDownloadToFramework("net472", packageX1);
 
-                projectA.AddPackageDownloadToFramework("net46", packageX2);
+                projectA.AddPackageDownloadToFramework("net48", packageX2);
 
                 solution.Projects.Add(projectA);
                 solution.Create(pathContext.SolutionRoot);
@@ -7214,7 +7206,7 @@ namespace NuGet.CommandLine.Test
                 Assert.Equal("x", lockFile.PackageSpec.TargetFrameworks.Last().DownloadDependencies.First().Name);
                 var packagePath = Path.Combine(pathContext.UserPackagesFolder, packageX.Identity.Id, packageX.Version);
                 Assert.True(Directory.Exists(packagePath), $"{packageX.ToString()} is not installed");
-                Assert.Contains("Writing cache file", r.Item2);
+                Assert.Contains("Writing cache file", r.Output);
 
 
                 // Act
@@ -7223,9 +7215,9 @@ namespace NuGet.CommandLine.Test
 
                 Assert.True(Directory.Exists(packagePath), $"{packageX.ToString()} is not installed");
 
-                Assert.Equal(0, r.Item1);
-                Assert.DoesNotContain("Writing cache file", r.Item2);
-                Assert.Contains("No further actions are required to complete", r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.DoesNotContain("Writing cache file", r.Output);
+                Assert.Contains("No further actions are required to complete", r.Output);
             }
         }
 
@@ -9236,8 +9228,8 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX100NullVersion);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0")
-                    .AddPackageVersion("y", "1.0.0");
+                    .SetPackageVersion("x", "1.0.0")
+                    .SetPackageVersion("y", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -9255,7 +9247,7 @@ namespace NuGet.CommandLine.Test
                 r = Util.RestoreSolution(pathContext);
 
                 // Update the cpvm
-                cpvmFile.UpdatePackageVersion("x", "2.0.0");
+                cpvmFile.SetPackageVersion("x", "2.0.0");
                 cpvmFile.Save();
 
                 // Expect exit code 1 on this restore
@@ -9321,8 +9313,8 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX100NullVersion);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0")
-                    .AddPackageVersion("y", "1.0.0");
+                    .SetPackageVersion("x", "1.0.0")
+                    .SetPackageVersion("y", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -9337,7 +9329,7 @@ namespace NuGet.CommandLine.Test
                 Assert.True(File.Exists(projectA.NuGetLockFileOutputPath));
 
                 // Update the transitive dependency in cpvm
-                cpvmFile.UpdatePackageVersion("y", "2.0.0");
+                cpvmFile.SetPackageVersion("y", "2.0.0");
                 cpvmFile.Save();
 
                 // Expect exit code 1 on this restore
@@ -9396,8 +9388,8 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX100NullVersion);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0")
-                    .AddPackageVersion("y", "1.0.0");
+                    .SetPackageVersion("x", "1.0.0")
+                    .SetPackageVersion("y", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -9470,8 +9462,8 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX100NullVersion);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0")
-                    .AddPackageVersion("y", "1.0.0");
+                    .SetPackageVersion("x", "1.0.0")
+                    .SetPackageVersion("y", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -9544,7 +9536,7 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX100NullVersion);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0");
+                    .SetPackageVersion("x", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -9559,7 +9551,7 @@ namespace NuGet.CommandLine.Test
                 Assert.True(File.Exists(projectA.NuGetLockFileOutputPath));
 
                 // Update the cpvm
-                cpvmFile.AddPackageVersion("y", "1.0.0");
+                cpvmFile.SetPackageVersion("y", "1.0.0");
                 cpvmFile.Save();
 
                 // Expect exit code 1 on this restore
@@ -9626,8 +9618,8 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX100NullVersion);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0")
-                    .AddPackageVersion("y", "1.0.0");
+                    .SetPackageVersion("x", "1.0.0")
+                    .SetPackageVersion("y", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -9642,7 +9634,7 @@ namespace NuGet.CommandLine.Test
                 Assert.True(File.Exists(projectA.NuGetLockFileOutputPath));
 
                 // Add new package version the cpvm
-                cpvmFile.AddPackageVersion("random", "1.0.0");
+                cpvmFile.SetPackageVersion("random", "1.0.0");
                 cpvmFile.Save();
 
                 // the addition should not impact this restore
@@ -9742,8 +9734,8 @@ namespace NuGet.CommandLine.Test
                 projectC.AddPackageToAllFrameworks(packageX);
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("x", "1.0.0")
-                    .AddPackageVersion("y", "2.0.0");
+                    .SetPackageVersion("x", "1.0.0")
+                    .SetPackageVersion("y", "2.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
@@ -9924,19 +9916,19 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packagesForProject.ToArray());
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("B", version100)
-                    .AddPackageVersion("F", version100)
-                    .AddPackageVersion("G", version100)
-                    .AddPackageVersion("E", version300)
-                    .AddPackageVersion("D", version200)
-                    .AddPackageVersion("M", version200)
-                    .AddPackageVersion("P", version300)
-                    .AddPackageVersion("Z", version300)
-                    .AddPackageVersion("T", version300)
-                    .AddPackageVersion("X", version100)
-                    .AddPackageVersion("U", version100)
-                    .AddPackageVersion("R", version300)
-                    .AddPackageVersion("S", version300);
+                    .SetPackageVersion("B", version100)
+                    .SetPackageVersion("F", version100)
+                    .SetPackageVersion("G", version100)
+                    .SetPackageVersion("E", version300)
+                    .SetPackageVersion("D", version200)
+                    .SetPackageVersion("M", version200)
+                    .SetPackageVersion("P", version300)
+                    .SetPackageVersion("Z", version300)
+                    .SetPackageVersion("T", version300)
+                    .SetPackageVersion("X", version100)
+                    .SetPackageVersion("U", version100)
+                    .SetPackageVersion("R", version300)
+                    .SetPackageVersion("S", version300);
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -10029,13 +10021,7 @@ namespace NuGet.CommandLine.Test
                 var project = SimpleTestProjectContext.CreateNETCoreWithSDK(
                     "proj",
                     pathContext.SolutionRoot,
-                    "net5.0-windows");
-
-                // Workaround: Set all the TFM properties ourselves.
-                // We can't rely on the SDK setting them, as only .NET 5 SDK P8 and later applies these correctly.
-                var net50windowsTFM = project.Frameworks.Where(f => f.TargetAlias.Equals("net5.0-windows")).Single();
-                net50windowsTFM.Properties.Add("TargetFrameworkMoniker", ".NETCoreApp, Version=v5.0");
-                net50windowsTFM.Properties.Add("TargetPlatformMoniker", "Windows, Version=7.0");
+                    "net8.0-windows");
 
                 project.AddPackageToAllFrameworks(packageX);
                 solution.Projects.Add(project);
@@ -10048,13 +10034,13 @@ namespace NuGet.CommandLine.Test
 
                 // Act
                 var r = Util.RestoreSolution(pathContext);
-                Assert.Equal(0, r.Item1);
-                Assert.True(File.Exists(project.PropsOutput), r.Item2);
+                Assert.Equal(0, r.ExitCode);
+                Assert.True(File.Exists(project.PropsOutput), r.Output);
                 var propsXML = XDocument.Parse(File.ReadAllText(project.PropsOutput));
 
                 var propsItemGroups = propsXML.Root.Elements().Where(e => e.Name.LocalName == "ItemGroup").ToList();
 
-                Assert.Contains("'$(TargetFramework)' == 'net5.0-windows' AND '$(ExcludeRestorePackageImports)' != 'true'", propsItemGroups[1].Attribute(XName.Get("Condition")).Value.Trim());
+                Assert.Contains("'$(TargetFramework)' == 'net8.0-windows' AND '$(ExcludeRestorePackageImports)' != 'true'", propsItemGroups[1].Attribute(XName.Get("Condition")).Value.Trim());
             }
         }
 
@@ -10103,8 +10089,8 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packagesForProject.ToArray());
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("B", "1.0.0")
-                    .AddPackageVersion("C", "2.0.0");
+                    .SetPackageVersion("B", "1.0.0")
+                    .SetPackageVersion("C", "2.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -10129,6 +10115,123 @@ namespace NuGet.CommandLine.Test
                     .SelectMany(g => g.TransitiveDependencies.Select(t => $"{g.FrameworkName}_{t.LibraryRange.Name}.{t.LibraryRange.VersionRange.OriginalString}")).ToList();
 
                 Assert.Equal(0, centralfileDependencyGroups.Count);
+            }
+        }
+
+        [Fact]
+        public async Task RestoreNetCore_CPVMProject_WithGlobalPackageReferences_Succeeds()
+        {
+            // Arrange
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Set up solution, project, and packages
+                var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+                var packagesForSource = new List<SimpleTestPackageContext>();
+
+                SimpleTestProjectContext projectA = SimpleTestProjectContext.CreateNETCore("projectA", pathContext.SolutionRoot, FrameworkConstants.CommonFrameworks.NetCoreApp20);
+
+                await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                   pathContext.PackageSource,
+                   new[]
+                   {
+                       new SimpleTestPackageContext()
+                        {
+                            Id = "PackageA",
+                            Version = "1.0.0"
+                        },
+                        new SimpleTestPackageContext()
+                        {
+                            Id = "ToolPackageA",
+                            Version = "1.0.0"
+                        }
+                   });
+
+                projectA.AddPackageToAllFrameworks(new[]
+                {
+                    new SimpleTestPackageContext()
+                    {
+                        Id = "PackageA",
+                        Version = null,
+                    }
+                });
+
+                solution.Projects.Add(projectA);
+                solution.CentralPackageVersionsManagementFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
+                    .SetPackageVersion("PackageA", "1.0.0")
+                    .SetGlobalPackageReference("ToolPackageA", "1.0.0");
+                solution.Create(pathContext.SolutionRoot);
+
+                // Act
+                CommandRunnerResult result = Util.RestoreSolution(pathContext);
+
+                // Assert
+                result.Success.Should().BeTrue();
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath));
+
+                LockFile assetsFile = new LockFileFormat().Read(projectA.AssetsFileOutputPath);
+
+                LibraryDependency packageADependency = assetsFile.PackageSpec.TargetFrameworks.SingleOrDefault().Dependencies.Single(i => i.Name == "PackageA");
+                LibraryDependency toolPackageADependency = assetsFile.PackageSpec.TargetFrameworks.SingleOrDefault().Dependencies.Single(i => i.Name == "ToolPackageA");
+
+                packageADependency.IncludeType.Should().Be(LibraryIncludeFlags.All);
+                packageADependency.SuppressParent.Should().Be(LibraryIncludeFlagUtils.DefaultSuppressParent);
+
+                toolPackageADependency.IncludeType.Should().Be(LibraryIncludeFlags.All & ~LibraryIncludeFlags.Compile & ~LibraryIncludeFlags.BuildTransitive);
+                toolPackageADependency.SuppressParent.Should().Be(LibraryIncludeFlags.All);
+            }
+        }
+
+        [Fact]
+        public async Task RestoreNetCore_CPVMProject_WithGloballPackageReferencesButCentralPackageManagementDisabled_GlobalPackageReferencesAreIgnored()
+        {
+            // Arrange
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Set up solution, project, and packages
+                var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+                var packagesForSource = new List<SimpleTestPackageContext>();
+
+                SimpleTestProjectContext projectA = SimpleTestProjectContext.CreateNETCore("projectA", pathContext.SolutionRoot, FrameworkConstants.CommonFrameworks.NetCoreApp20);
+
+                await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                   pathContext.PackageSource,
+                   new[]
+                   {
+                       new SimpleTestPackageContext()
+                        {
+                            Id = "PackageA",
+                            Version = "1.0.0"
+                        }
+                   });
+
+                projectA.AddPackageToAllFrameworks(new[]
+                {
+                    new SimpleTestPackageContext()
+                    {
+                        Id = "PackageA",
+                        Version = "1.0.0",
+                    }
+                });
+
+                solution.Projects.Add(projectA);
+                solution.CentralPackageVersionsManagementFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot, managePackageVersionsCentrally: false)
+                    .SetPackageVersion("PackageA", "1.0.0")
+                    .SetGlobalPackageReference("ToolPackageA", "1.0.0");
+                solution.Create(pathContext.SolutionRoot);
+
+                // Act
+                CommandRunnerResult result = Util.RestoreSolution(pathContext);
+
+                // Assert
+                result.Success.Should().BeTrue();
+                Assert.True(File.Exists(projectA.AssetsFileOutputPath));
+
+                LockFile assetsFile = new LockFileFormat().Read(projectA.AssetsFileOutputPath);
+
+                LibraryDependency packageADependency = assetsFile.PackageSpec.TargetFrameworks.SingleOrDefault().Dependencies.Should().ContainSingle().Subject;
+
+                packageADependency.IncludeType.Should().Be(LibraryIncludeFlags.All);
+                packageADependency.SuppressParent.Should().Be(LibraryIncludeFlagUtils.DefaultSuppressParent);
             }
         }
 
@@ -10184,8 +10287,8 @@ namespace NuGet.CommandLine.Test
                 });
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("A", "1.0.0")
-                    .AddPackageVersion("B", "1.0.0");
+                    .SetPackageVersion("A", "1.0.0")
+                    .SetPackageVersion("B", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -10266,8 +10369,8 @@ namespace NuGet.CommandLine.Test
                 });
 
                 var cpvmFile = CentralPackageVersionsManagementFile.Create(pathContext.SolutionRoot)
-                    .AddPackageVersion("A", "1.0.0")
-                    .AddPackageVersion("B", "1.0.0");
+                    .SetPackageVersion("A", "1.0.0")
+                    .SetPackageVersion("B", "1.0.0");
 
                 solution.Projects.Add(projectA);
                 solution.CentralPackageVersionsManagementFile = cpvmFile;
@@ -10353,11 +10456,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert correct projects were restored.
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath));
@@ -10659,11 +10761,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Preconditions
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert correct projects were restored.
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath));
@@ -10695,8 +10796,7 @@ namespace NuGet.CommandLine.Test
                 r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", lockedModeArgs),
-                    waitForExit: true);
+                    string.Join(" ", lockedModeArgs));
 
                 r.Success.Should().BeTrue(because: r.AllOutput);
             }
@@ -10780,11 +10880,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Pre-Conditions
-                Assert.True(0 == r.Item1, r.Item2 + " " + r.Item3);
+                Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Change project C, bump the package Y version.
                 projectC.CleanPackagesFromAllFrameworks();
@@ -10796,8 +10895,7 @@ namespace NuGet.CommandLine.Test
                 r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", lockedModeArgs),
-                    waitForExit: true);
+                    string.Join(" ", lockedModeArgs));
 
                 // Assert
                 r.Success.Should().BeFalse(because: r.AllOutput);
@@ -11199,8 +11297,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 var r = CommandRunner.Run(
                     Util.GetNuGetExePath(),
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 r.Success.Should().BeTrue(because: r.AllOutput);
@@ -11248,7 +11345,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 xml.Save(projectA.ProjectPath);
 
                 var directoryPackagesPropsContent =
-                   @"<Project>                    
+                   @"<Project>
                         <ItemGroup>
                             <PackageVersion Include=""X"" Version=""[1.0.0]"" />
                             <PackageVersion Include=""X"" Version=""[2.0.0]"" />
@@ -11267,12 +11364,158 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 var r = CommandRunner.Run(
                     Util.GetNuGetExePath(),
                     pathContext.WorkingDirectory.Path,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 r.Success.Should().BeTrue(because: r.AllOutput);
                 r.AllOutput.Should().NotContain("NU1506");
+            }
+        }
+
+        [Fact]
+        public async Task NuGetRestoreRestore_WithWarningsNotAsErrors_SucceedsAndRaisesWarning()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = SimpleTestProjectContext.CreateNETCoreWithSDK(
+                    "a",
+                    pathContext.SolutionRoot,
+                    "net472");
+            // Add 1.0.0
+            projectA.AddPackageToAllFrameworks(new SimpleTestPackageContext()
+            {
+                Id = "x",
+                Version = "1.0.0"
+            });
+            // But create only 2.0.0 on the server.
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, new SimpleTestPackageContext { Id = "x", Version = "2.0.0" });
+            projectA.Properties.Add("TreatWarningsAsErrors", "true");
+            projectA.Properties.Add("WarningsNotAsErrors", "NU1603");
+            solution.Projects.Add(projectA);
+            solution.Create(pathContext.SolutionRoot);
+
+            var args = new string[] {
+                    "restore",
+                    solution.SolutionPath,
+                    "-Verbosity",
+                    "detailed",
+                };
+            CommandRunnerResult result = CommandRunner.Run(
+                    Util.GetNuGetExePath(),
+                    pathContext.WorkingDirectory.Path,
+                    string.Join(" ", args));
+
+            // Assert
+            result.Success.Should().BeTrue(because: result.AllOutput);
+            result.Output.Should().Contain("WARNING: NU1603");
+        }
+
+        /// <summary>
+        /// A 1.0 -> D 1.0 (Central transitive)
+        ///       -> B 1.0 -> D 3.0 (Central transitive - should be ignored because it is not at root)
+        ///                -> C 1.0 -> D 2.0
+        /// </summary>
+        [Theory]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        public async Task RestoreNetCore_TransitiveDependenciesFromNonRootLibraries_AreIgnored(bool centralPackageTransitivePinningEnabled, bool expectedSuccess)
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            // Set up solution, project, and packages
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+
+            var projectC = CreateProject(pathContext, "C");
+            var projectB = CreateProject(pathContext, "B", projectC);
+            var projectA = CreateProject(pathContext, "A", projectB);
+
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                new SimpleTestPackageContext("D", "1.0.0"),
+                new SimpleTestPackageContext("D", "2.0.0"),
+                new SimpleTestPackageContext("D", "3.0.0")
+            );
+
+            solution.Projects.Add(projectA);
+            solution.Projects.Add(projectB);
+            solution.Projects.Add(projectC);
+            solution.Create(pathContext.SolutionRoot);
+
+            AddPackageReferenceToProject(projectC);
+
+            CreateDirectoryPackagesPropsWithVersionForPackageD(pathContext, projectA, "1.0.0");
+            CreateDirectoryPackagesPropsWithVersionForPackageD(pathContext, projectB, "3.0.0");
+            CreateDirectoryPackagesPropsWithVersionForPackageD(pathContext, projectC, "2.0.0");
+
+            var args = new string[] {
+                    "restore",
+                    solution.SolutionPath,
+                    "-Verbosity",
+                    "detailed",
+                };
+
+            // Act
+            var r = CommandRunner.Run(
+                Util.GetNuGetExePath(),
+                pathContext.WorkingDirectory.Path,
+                string.Join(" ", args));
+
+            // Assert
+            r.Success.Should().Be(expectedSuccess, because: r.AllOutput);
+
+            if (expectedSuccess == false)
+            {
+                r.Errors.Should().Contain(
+                        "NU1109: Detected package downgrade: D from 2.0.0 to centrally defined 1.0.0. Update the centrally managed package version to a higher version.");
+                r.Errors.Should().Contain("A -> B -> C -> D (>= 2.0.0)");
+                r.Errors.Should().Contain("A -> D (>= 1.0.0)");
+            }
+
+            // Local methods
+            void CreateDirectoryPackagesPropsWithVersionForPackageD(SimpleTestPathContext pathContext, SimpleTestProjectContext projectContext, string version)
+            {
+                var directoryPackagesPropsContent =
+                    @$"<Project>
+                            <ItemGroup>
+                                <PackageVersion Include=""D"" Version=""{version}"" />
+                            </ItemGroup>
+                        </Project>";
+                var directoryName = Path.GetDirectoryName(projectContext.ProjectPath);
+                File.WriteAllText(Path.Combine(directoryName, $"Directory.Packages.Props"), directoryPackagesPropsContent);
+            }
+
+            SimpleTestProjectContext CreateProject(SimpleTestPathContext pathContext, string name, SimpleTestProjectContext referencedProject = null)
+            {
+                var projectContext = SimpleTestProjectContext.CreateNETCoreWithSDK(
+                    name,
+                    pathContext.SolutionRoot,
+                    "net472");
+
+                projectContext.Properties.Add("ManagePackageVersionsCentrally", "true");
+                projectContext.Properties.Add("CentralPackageTransitivePinningEnabled", centralPackageTransitivePinningEnabled.ToString());
+
+                if (referencedProject != null)
+                    projectContext.AddProjectToAllFrameworks(referencedProject);
+
+                return projectContext;
+            }
+
+            void AddPackageReferenceToProject(SimpleTestProjectContext project)
+            {
+                var xml = project.GetXML();
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "D",
+                    NuGetFramework.AnyFramework,
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, string>());
+
+                xml.Save(project.ProjectPath);
             }
         }
 
